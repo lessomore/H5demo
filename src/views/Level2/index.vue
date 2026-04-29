@@ -18,7 +18,6 @@
 
     <!-- 阶段2：拼图游戏页 -->
     <div v-if="gamePhase === 'playing'" class="game-area">
-      <!-- 关闭按钮 -->
       <img
         class="close-btn"
         src="@/assets/level2/第二关/close.png"
@@ -26,37 +25,26 @@
         @click="goHome"
       />
 
-      <!-- 拼图区域 -->
+      <!-- 拼图区域：9 个切图绝对定位拼成 -->
       <div class="puzzle-area">
         <div class="puzzle-container" ref="puzzleContainerRef">
-          <!-- 基图（有6个空洞） -->
-          <img class="puzzle-base" src="@/assets/level2/第二关/drag_bg.png" alt="拼图基图" />
-          <!-- 6个放置区域（绝对定位在基图上） -->
+          <!-- 顶部 3 块固定 -->
+          <img class="tile" :style="tilePos.top1" :src="imgTop1" alt="" />
+          <img class="tile" :style="tilePos.top2" :src="imgTop2" alt="" />
+          <img class="tile" :style="tilePos.top3" :src="imgTop3" alt="" />
+          <!-- 中间 + 底部 6 块：背景 + 拖放区 -->
           <div
             v-for="(slot, i) in dropSlots"
             :key="'slot-' + i"
-            class="drop-zone"
+            class="tile-slot"
+            :style="slot.tileStyle"
             :ref="(el) => { if (el) slotRefs[i] = el as HTMLElement }"
-            :style="slot.position"
-            :class="{ 'drop-zone--filled': slot.filled }"
           >
-            <img
-              v-if="slot.filled"
-              :src="slot.filledSrc"
-              class="placed-piece animate-snap"
-              :style="{ width: '100%', height: '100%' }"
-            />
+            <img class="tile-bg" :src="slot.bgSrc" alt="" />
+            <img v-if="slot.filled" :src="slot.filledSrc" class="placed-piece animate-snap" />
           </div>
         </div>
       </div>
-
-      <!-- 提示按钮 -->
-      <!-- <img
-        class="game-tip-btn"
-        src="@/assets/level2/第二关/tishi.png"
-        alt="提示"
-        @click="showTipFromGame = true"
-      /> -->
 
       <!-- 提示浮层 -->
       <div v-if="showTipFromGame" class="tip-overlay" @click="showTipFromGame = false">
@@ -72,7 +60,6 @@
         <div class="material-panel">
           <img class="material-bg" src="@/assets/level2/第二关/swiper_bg.png" alt="" />
           <div class="material-content">
-            <!-- 左翻页按钮 -->
             <img
               class="swiper-arrow swiper-arrow--left"
               src="@/assets/level2/第二关/swiper_change.png"
@@ -80,7 +67,6 @@
               :class="{ 'swiper-arrow--disabled': materialPage === 0 }"
               @click="materialPage = Math.max(0, materialPage - 1)"
             />
-            <!-- 材料卡片（当前页显示4个） -->
             <div class="material-grid">
               <div
                 v-for="mat in currentPageMaterials"
@@ -92,19 +78,13 @@
                 <div
                   v-if="!mat.placed"
                   class="material-draggable"
-                  @touchstart.prevent="(e) => onDragStart(e, mat)"
-                  @mousedown.prevent="(e) => onDragStart(e, mat)"
+                  @touchstart.prevent="(e: any) => onDragStart(e, mat)"
+                  @mousedown.prevent="(e: any) => onDragStart(e, mat)"
                 >
-                  <img
-                    :src="mat.src"
-                    :alt="mat.label"
-                    class="material-img"
-                    :style="getDragStyle(mat.id)"
-                  />
+                  <img :src="mat.src" :alt="mat.label" class="material-img" />
                 </div>
               </div>
             </div>
-            <!-- 右翻页按钮 -->
             <img
               class="swiper-arrow swiper-arrow--right"
               src="@/assets/level2/第二关/swiper_change.png"
@@ -116,7 +96,12 @@
         </div>
       </div>
 
-      <!-- 拖拽中的幽灵图片 -->
+      <!-- 错误提示 -->
+      <Transition name="toast">
+        <div v-if="errorToast" class="error-toast">{{ errorToast }}</div>
+      </Transition>
+
+      <!-- 拖拽幽灵 -->
       <div
         v-if="dragState.active"
         class="drag-ghost"
@@ -147,40 +132,63 @@ import { useRouter } from 'vue-router'
 import { isOverTarget } from '@/composables/useDrag'
 import ResultModal from '@/components/ResultModal.vue'
 
-// 图片资源引入
+// ===== 图片资源 =====
+import imgTop1 from '@/assets/level2/第二关/top1.png'
+import imgTop2 from '@/assets/level2/第二关/top2.png'
+import imgTop3 from '@/assets/level2/第二关/top3.png'
+import imgC1Bg from '@/assets/level2/第二关/center1_bg.png'
+import imgC2Bg from '@/assets/level2/第二关/center2_bg.png'
+import imgC3Bg from '@/assets/level2/第二关/center3_bg.png'
+import imgB1Bg from '@/assets/level2/第二关/bottom1_bg.png'
+import imgB2Bg from '@/assets/level2/第二关/bottom2_bg.png'
+import imgB3Bg from '@/assets/level2/第二关/bottom3_bg.png'
 import center1 from '@/assets/level2/第二关/center1.png'
 import center2 from '@/assets/level2/第二关/center2.png'
 import center3 from '@/assets/level2/第二关/center3.png'
 import bottom1 from '@/assets/level2/第二关/bottom1.png'
 import bottom2 from '@/assets/level2/第二关/bottom2.png'
 import bottom3 from '@/assets/level2/第二关/bottom3.png'
+// 大尺寸拼图块（与 *_bg 同尺寸，用于拖拽幽灵和放置后显示）
+import center11 from '@/assets/level2/第二关/center11.png'
+import center22 from '@/assets/level2/第二关/center22.png'
+import center33 from '@/assets/level2/第二关/center33.png'
+import bottom11 from '@/assets/level2/第二关/bottom11.png'
+import bottom22 from '@/assets/level2/第二关/bottom22.png'
+import bottom33 from '@/assets/level2/第二关/bottom33.png'
 
 const router = useRouter()
-
-// 游戏阶段：start → playing → success
 const gamePhase = ref<'start' | 'playing' | 'success'>('start')
 const showTipFromGame = ref(false)
+const puzzleContainerRef = ref<HTMLElement | null>(null)
+const errorToast = ref('')
+let errorTimer: ReturnType<typeof setTimeout> | null = null
+
+// ===== 切图定位（模板匹配结果，百分比相对于 1178x1174 基图） =====
+const tilePos = {
+  top1: { left: '0%', top: '0%', width: '33.62%', height: '44.21%' },
+  top2: { left: '22.58%', top: '0%', width: '44.23%', height: '33.65%' },
+  top3: { left: '55.77%', top: '0%', width: '44.23%', height: '33.65%' },
+}
 
 // ===== 材料定义 =====
-// 6块拼图材料，对应基图中的6个空洞位置
 interface Material {
   id: string
-  src: string
+  src: string      // 缩略图，工具栏展示用
+  fullSrc: string  // 大图，拖拽幽灵和放置后用
   label: string
-  targetSlotIndex: number // 对应 dropSlots 的索引
+  targetSlotIndex: number
   placed: boolean
 }
 
 const materials = reactive<Material[]>([
-  { id: 'c1', src: center1, label: '中间1', targetSlotIndex: 0, placed: false },
-  { id: 'c2', src: center2, label: '中间2', targetSlotIndex: 1, placed: false },
-  { id: 'c3', src: center3, label: '中间3', targetSlotIndex: 2, placed: false },
-  { id: 'b1', src: bottom1, label: '底部1', targetSlotIndex: 3, placed: false },
-  { id: 'b2', src: bottom2, label: '底部2', targetSlotIndex: 4, placed: false },
-  { id: 'b3', src: bottom3, label: '底部3', targetSlotIndex: 5, placed: false },
+  { id: 'c1', src: center1, fullSrc: center11, label: '中间1', targetSlotIndex: 0, placed: false },
+  { id: 'c2', src: center2, fullSrc: center22, label: '中间2', targetSlotIndex: 1, placed: false },
+  { id: 'c3', src: center3, fullSrc: center33, label: '中间3', targetSlotIndex: 2, placed: false },
+  { id: 'b1', src: bottom1, fullSrc: bottom11, label: '底部1', targetSlotIndex: 3, placed: false },
+  { id: 'b2', src: bottom2, fullSrc: bottom22, label: '底部2', targetSlotIndex: 4, placed: false },
+  { id: 'b3', src: bottom3, fullSrc: bottom33, label: '底部3', targetSlotIndex: 5, placed: false },
 ])
 
-// 材料分页：每页4个
 const materialPage = ref(0)
 const PAGE_SIZE = 4
 const maxPage = computed(() => Math.ceil(materials.length / PAGE_SIZE) - 1)
@@ -190,29 +198,27 @@ const currentPageMaterials = computed(() => {
 })
 
 // ===== 放置区域定义 =====
-// 6个空洞位置（百分比，相对于基图）
-// 布局：上排3个（中间行）+ 下排3个（底部行）
 interface DropSlot {
-  position: {
-    left: string
-    top: string
-    width: string
-    height: string
-  }
+  tileStyle: { left: string; top: string; width: string; height: string }
+  bgSrc: string
   filled: boolean
   filledSrc: string
   expectedId: string
 }
 
 const dropSlots = reactive<DropSlot[]>([
-  // 中间行3个空洞（center1, center2, center3）
-  { position: { left: '1%', top: '33%', width: '31%', height: '22%' }, filled: false, filledSrc: '', expectedId: 'c1' },
-  { position: { left: '34%', top: '33%', width: '31%', height: '22%' }, filled: false, filledSrc: '', expectedId: 'c2' },
-  { position: { left: '67%', top: '33%', width: '31%', height: '22%' }, filled: false, filledSrc: '', expectedId: 'c3' },
-  // 底部行3个空洞（bottom1, bottom2, bottom3）
-  { position: { left: '1%', top: '57%', width: '31%', height: '22%' }, filled: false, filledSrc: '', expectedId: 'b1' },
-  { position: { left: '34%', top: '57%', width: '31%', height: '22%' }, filled: false, filledSrc: '', expectedId: 'b2' },
-  { position: { left: '67%', top: '57%', width: '31%', height: '22%' }, filled: false, filledSrc: '', expectedId: 'b3' },
+  // center1_bg @(0, 390) 521x395
+  { tileStyle: { left: '0%', top: '33.22%', width: '44.23%', height: '33.65%' }, bgSrc: imgC1Bg, filled: false, filledSrc: '', expectedId: 'c1' },
+  // center2_bg @(391, 266) 396x519
+  { tileStyle: { left: '33.19%', top: '22.66%', width: '33.62%', height: '44.21%' }, bgSrc: imgC2Bg, filled: false, filledSrc: '', expectedId: 'c2' },
+  // center3_bg @(657, 266) 521x643
+  { tileStyle: { left: '55.77%', top: '22.66%', width: '44.23%', height: '54.77%' }, bgSrc: imgC3Bg, filled: false, filledSrc: '', expectedId: 'c3' },
+  // bottom1_bg @(0, 655) 396x519
+  { tileStyle: { left: '0%', top: '55.79%', width: '33.62%', height: '44.21%' }, bgSrc: imgB1Bg, filled: false, filledSrc: '', expectedId: 'b1' },
+  // bottom2_bg @(266, 655) 646x519
+  { tileStyle: { left: '22.58%', top: '55.79%', width: '54.84%', height: '44.21%' }, bgSrc: imgB2Bg, filled: false, filledSrc: '', expectedId: 'b2' },
+  // bottom3_bg @(782, 780) 396x394
+  { tileStyle: { left: '66.38%', top: '66.44%', width: '33.62%', height: '33.56%' }, bgSrc: imgB3Bg, filled: false, filledSrc: '', expectedId: 'b3' },
 ])
 
 const slotRefs = ref<HTMLElement[]>([])
@@ -226,13 +232,7 @@ const dragState = reactive({
   ghostW: 60,
   ghostH: 60,
   ghostSrc: '',
-  offsetX: 0,
-  offsetY: 0,
 })
-
-function getDragStyle(_id: string) {
-  return {}
-}
 
 function onDragStart(e: TouchEvent | MouseEvent, mat: Material) {
   if (mat.placed) return
@@ -242,9 +242,17 @@ function onDragStart(e: TouchEvent | MouseEvent, mat: Material) {
   dragState.matId = mat.id
   dragState.currentX = pos.clientX
   dragState.currentY = pos.clientY
-  dragState.ghostSrc = mat.src
-  dragState.ghostW = 60
-  dragState.ghostH = 60
+  dragState.ghostSrc = mat.fullSrc
+
+  const targetSlotEl = slotRefs.value[mat.targetSlotIndex]
+  if (targetSlotEl) {
+    const rect = targetSlotEl.getBoundingClientRect()
+    dragState.ghostW = rect.width
+    dragState.ghostH = rect.height
+  } else {
+    dragState.ghostW = 60
+    dragState.ghostH = 60
+  }
 
   const onMove = (ev: TouchEvent | MouseEvent) => {
     ev.preventDefault()
@@ -257,7 +265,6 @@ function onDragStart(e: TouchEvent | MouseEvent, mat: Material) {
     const p = 'changedTouches' in ev ? ev.changedTouches[0] : ev
     handleDrop(mat, p.clientX, p.clientY)
     dragState.active = false
-
     document.removeEventListener('touchmove', onMove)
     document.removeEventListener('touchend', onEnd)
     document.removeEventListener('mousemove', onMove)
@@ -270,8 +277,15 @@ function onDragStart(e: TouchEvent | MouseEvent, mat: Material) {
   document.addEventListener('mouseup', onEnd)
 }
 
+function showError(msg: string) {
+  if (errorTimer) clearTimeout(errorTimer)
+  errorToast.value = msg
+  errorTimer = setTimeout(() => {
+    errorToast.value = ''
+  }, 1500)
+}
+
 function handleDrop(mat: Material, x: number, y: number) {
-  // 找到该材料对应的目标槽位
   const targetIdx = mat.targetSlotIndex
   const slot = dropSlots[targetIdx]
   if (!slot || slot.filled) return
@@ -279,25 +293,33 @@ function handleDrop(mat: Material, x: number, y: number) {
   const el = slotRefs.value[targetIdx]
   if (!el) return
 
+  // 检查是否落在正确的目标 slot 上
   if (isOverTarget({ x, y }, el, 30)) {
-    // 放置成功
     slot.filled = true
-    slot.filledSrc = mat.src
+    slot.filledSrc = mat.fullSrc
     mat.placed = true
 
-    // 检查是否全部完成
     const allFilled = dropSlots.every((s) => s.filled)
     if (allFilled) {
       setTimeout(() => {
         gamePhase.value = 'success'
       }, 800)
     }
+    return
+  }
+
+  // 检查是否落在了其他 slot 上（放错位置）
+  for (let i = 0; i < dropSlots.length; i++) {
+    if (i === targetIdx || dropSlots[i].filled) continue
+    const otherEl = slotRefs.value[i]
+    if (otherEl && isOverTarget({ x, y }, otherEl, 30)) {
+      showError('位置不对，再试试！')
+      return
+    }
   }
 }
 
-// ===== 页面操作 =====
 function enterLevel() {
-  console.log('进入关卡')
   gamePhase.value = 'playing'
 }
 
@@ -306,7 +328,6 @@ function goHome() {
 }
 
 onMounted(() => {
-  // 默认进入开始页
   gamePhase.value = 'start'
 })
 </script>
@@ -345,7 +366,6 @@ onMounted(() => {
 .start-tip-img {
   width: 100%;
   max-width: 380px;
-  // height: auto;
   min-height: 400px;
   filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
 }
@@ -378,7 +398,6 @@ onMounted(() => {
   margin-top: -120px;
   transition: transform $duration-fast ease;
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.2));
-
   &:active {
     transform: scale(0.95);
   }
@@ -446,7 +465,7 @@ onMounted(() => {
   pointer-events: auto;
 }
 
-// 拼图区域
+// ===== 拼图区域 =====
 .puzzle-area {
   flex: 1;
   display: flex;
@@ -460,47 +479,37 @@ onMounted(() => {
   position: relative;
   width: 100%;
   max-width: 360px;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 1178 / 1174;
 }
 
-.puzzle-base {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  border-radius: $radius-md;
+.tile {
+  position: absolute;
   user-select: none;
   -webkit-user-drag: none;
+  pointer-events: none;
 }
 
-// 放置区域
-.drop-zone {
+.tile-slot {
   position: absolute;
-  border: 2px dashed rgba(255, 255, 255, 0.4);
-  border-radius: $radius-sm;
-  overflow: hidden;
+  overflow: visible;
+}
 
-  &--filled {
-    border: none;
-  }
+.tile-bg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 
 .placed-piece {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: fill;
-}
-
-// 提示按钮
-.game-tip-btn {
-  position: absolute;
-  right: $spacing-md;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 36px;
-  height: 36px;
-  z-index: 20;
-  cursor: pointer;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 // ===== 底部材料选择区域 =====
@@ -539,20 +548,16 @@ onMounted(() => {
   pointer-events: auto;
   flex-shrink: 0;
   transition: opacity $duration-fast ease;
-
   &--left {
     transform: scaleX(-1);
   }
-
   &--disabled {
     opacity: 0.3;
     pointer-events: none;
   }
-
   &:active {
     transform: scale(0.9);
   }
-
   &--left:active {
     transform: scaleX(-1) scale(0.9);
   }
@@ -567,8 +572,7 @@ onMounted(() => {
 
 .material-card {
   position: relative;
-  aspect-ratio: 3 / 4;
-
+  aspect-ratio: 1;
   &--placed {
     opacity: 0.3;
   }
@@ -592,7 +596,6 @@ onMounted(() => {
   cursor: grab;
   touch-action: none;
   z-index: 1;
-
   &:active {
     cursor: grabbing;
   }
@@ -620,5 +623,36 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+// ===== 错误提示 =====
+.error-toast {
+  position: fixed;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: $font-size-sm;
+  padding: 10px 24px;
+  border-radius: 20px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.toast-enter-active {
+  transition: all 0.3s ease;
+}
+.toast-leave-active {
+  transition: all 0.4s ease;
+}
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px);
+}
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px);
 }
 </style>
