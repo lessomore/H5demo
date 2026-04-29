@@ -1,237 +1,276 @@
 <template>
-  <div class="level3 page">
-    <!-- 加载 -->
-    <GameLoading v-if="phase === 'loading'" />
-
-    <!-- 课堂讲解 -->
-    <LessonDialog
-      v-if="phase === 'lesson'"
-      content="岗位操作，规章为要。倒闸作业严格恪守两票三制，正确选用合格安全工器具，牢记标准操作顺序：先拉闸、再验电、后接地，严守安全作业准则。"
-      button-text="选择设备"
-      @start="enterToolSelect"
-    />
-
-    <!-- 画面2：工具选择 -->
-    <div v-if="gamePhase === 'select'" class="game-area">
-      <h3 class="phase-title">选择正确的安全工器具</h3>
-      <div class="tool-grid">
-        <div
-          v-for="tool in allTools"
-          :key="tool.id"
-          class="select-tool"
-          :class="{
-            'select-tool--correct': tool.selected && tool.correct,
-            'select-tool--wrong': tool.showError,
-          }"
-          @click="onToolClick(tool)"
-        >
-          <span class="select-icon">{{ tool.icon }}</span>
-          <span class="select-name">{{ tool.name }}</span>
-          <span v-if="tool.selected" class="check-mark">✓</span>
-        </div>
-      </div>
-
-      <!-- 已选装备栏 -->
-      <div class="selected-bar">
-        <div class="selected-label">已选装备：</div>
-        <div class="selected-items">
-          <span
-            v-for="t in selectedTools"
-            :key="t.id"
-            class="selected-tag"
-          >
-            {{ t.icon }} {{ t.name }}
-          </span>
-          <span v-if="selectedTools.length === 0" class="empty-hint">请点击上方工具选择</span>
-        </div>
-      </div>
-
-      <button
-        class="btn-pixar"
-        :disabled="!allCorrectSelected"
-        @click="enterOperation"
-      >
-        开始操作
+  <div class="level3 page" :class="{ 'level3--operate': gamePhase === 'operate' }">
+    <div v-if="gamePhase === 'start'" class="start-screen">
+      <img class="lesson-img" :src="tipImage" alt="课堂说明" />
+      <button class="start-btn" type="button" @click="gamePhase = 'select'">
+        <img :src="startButtonImage" alt="开始挑战" />
       </button>
-
-      <!-- 错误提示 -->
-      <p v-if="selectError" class="error-tip animate-shake">
-        ⚠️ 请选择适配工作场景工具
-      </p>
     </div>
 
-    <!-- 画面3：倒闸操作场景 -->
-    <div v-if="gamePhase === 'operate'" class="game-area">
-      <div class="scene-area">
-        <!-- 操作场景 -->
-        <div class="switch-scene" ref="sceneRef">
-          <div class="scene-bg">
-            <!-- 场景元素 -->
-            <div class="scene-element switch-blade" ref="switchRef">
-              <span class="element-label">刀闸</span>
-            </div>
-            <div class="scene-element bus-bar">
-              <span class="element-label">母线</span>
-            </div>
-            <div class="scene-element ground-point" ref="groundRef">
-              <span class="element-label">接地点</span>
-            </div>
-            <div class="scene-element supervisor">
-              <span class="element-label">👷 监护人</span>
-            </div>
-          </div>
+    <div v-else-if="gamePhase === 'select'" class="select-screen">
+      <div class="select-panel">
+        <img class="select-bg" :src="selectBgImage" alt="选择设备" />
+        <button class="close-btn" type="button" aria-label="关闭" @click="goHome">
+          <img :src="closeImage" alt="" />
+        </button>
 
-          <!-- 操作提示 -->
-          <div class="operation-hint">
-            <p>{{ currentHint }}</p>
-          </div>
+        <div class="select-grid">
+          <button
+            v-for="tool in selectTools"
+            :key="tool.id"
+            class="select-tool"
+            type="button"
+            :class="{ 'select-tool--selected': tool.selected }"
+            @click="trySelectTool(tool)"
+            @touchstart.prevent="(e) => onSelectDragStart(e, tool)"
+            @mousedown.prevent="(e) => onSelectDragStart(e, tool)"
+          >
+            <img class="select-tool-bg" :src="selectItemBgImage" alt="" />
+            <img class="select-tool-icon" :src="tool.image" :alt="tool.name" />
+            <span class="select-tool-name">{{ tool.name }}</span>
+          </button>
+        </div>
+      </div>
 
-          <!-- 操作反馈 -->
-          <div v-if="operationFeedback" class="operation-feedback animate-bounce-in">
-            {{ operationFeedback }}
+      <div class="selected-panel">
+        <img class="selected-panel-bg" :src="toolBgImage" alt="" />
+        <div class="selected-slots" ref="selectedSlotsRef">
+          <div v-for="slot in 4" :key="slot" class="selected-slot">
+            <img class="selected-slot-bg" :src="selectedItemImage" alt="" />
+            <img
+              v-if="selectedTools[slot - 1]"
+              class="selected-slot-icon"
+              :src="selectedTools[slot - 1].image"
+              :alt="selectedTools[slot - 1].name"
+            />
           </div>
         </div>
       </div>
 
-      <!-- 装备栏（可拖拽） -->
-      <div class="operate-toolbar">
+      <div
+        v-if="selectDragState.active"
+        class="select-drag-ghost"
+        :style="{ left: `${selectDragState.x}px`, top: `${selectDragState.y}px` }"
+      >
+        <img :src="selectDragState.image" alt="" />
+      </div>
+
+    </div>
+
+    <div v-else class="operate-screen">
+      <img class="operate-bg" :src="wrapperImage" alt="操作场景" />
+      <img class="top-tip" :src="topTipImage" alt="操作提示" />
+
+      <div class="area-layer">
         <div
-          v-for="tool in operateTools"
-          :key="tool.id"
-          class="operate-tool"
-          :class="{
-            'operate-tool--used': tool.used,
-            'operate-tool--active': tool.id === currentStep,
-          }"
-          :style="getDragStyle(tool.id)"
-          @touchstart.prevent="(e) => onOperateDrag(e, tool)"
-          @mousedown.prevent="(e) => onOperateDrag(e, tool)"
-        >
-          <span class="tool-icon">{{ tool.icon }}</span>
-          <span class="tool-name">{{ tool.name }}</span>
+          v-for="area in operateAreas"
+          :key="area.id"
+          class="operate-area"
+          :class="{ 'operate-area--active': area.active }"
+          :style="area.style"
+          :ref="(el) => setAreaRef(area.id, el as Element | null)"
+        ></div>
+      </div>
+
+      <div v-if="showVideoTip" class="video-tip-mask" @click="showVideoTip = false">
+        <div class="video-tip" @click.stop>
+          <img :src="glovesImage" alt="操作提示" />
         </div>
       </div>
+
+      <div v-if="workerChanged" class="worker-replace-tip">小人占位</div>
+
+      <div class="operate-tool-panel">
+        <img class="operate-tool-bg" :src="toolBgImage" alt="" />
+        <div class="operate-tools">
+          <button
+            v-for="tool in selectedTools"
+            :key="tool.id"
+            class="operate-tool"
+            type="button"
+          >
+            <img class="selected-slot-bg" :src="selectedItemImage" alt="" />
+            <img
+              class="operate-tool-icon"
+              :src="tool.image"
+              :alt="tool.name"
+              :style="getDragStyle(tool.id)"
+              @touchstart.prevent="(e) => onOperateDragStart(e, tool)"
+              @mousedown.prevent="(e) => onOperateDragStart(e, tool)"
+            />
+          </button>
+        </div>
+      </div>
+
+      <button class="operate-close" type="button" aria-label="关闭" @click="goHome">
+        <img :src="closeImage" alt="" />
+      </button>
     </div>
 
-    <!-- 结果弹窗 -->
+    <Transition name="toast">
+      <div v-if="toastText" class="toast">{{ toastText }}</div>
+    </Transition>
     <ResultModal
-      v-if="phase === 'success' || phase === 'failed'"
-      :success="phase === 'success'"
-      :message="phase === 'success' ? '倒闸操作规范完成！' : '操作顺序错误，请严格按照规程执行'"
-      @retry="retryAll"
+      v-if="levelComplete"
+      :success="true"
+      message="倒闸操作挑战成功！"
       @next="goHome"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useLevel } from '@/composables/useLevel'
-import { isOverTarget } from '@/composables/useDrag'
-import GameLoading from '@/components/GameLoading.vue'
-import LessonDialog from '@/components/LessonDialog.vue'
 import ResultModal from '@/components/ResultModal.vue'
+import startButtonImage from '@/assets/level2/第二关/start_btn.png'
+import tipImage from '@/assets/level3/第三关/tishi.png'
+import selectBgImage from '@/assets/level3/第三关/select_bg.png'
+import selectItemBgImage from '@/assets/level3/第三关/selectitem_bg.png'
+import selectedItemImage from '@/assets/level3/第三关/selectItem.png'
+import toolBgImage from '@/assets/level3/第三关/tool_bg.png'
+import wrapperImage from '@/assets/level3/第三关/wrapper.png'
+import topTipImage from '@/assets/level3/第三关/top_tip.png'
+import closeImage from '@/assets/level3/第三关/close.png'
+import ticketImage from '@/assets/level3/第三关/工作票操作票.png'
+import glovesImage from '@/assets/level3/第三关/绝缘手套.png'
+import groundImage from '@/assets/level3/第三关/接地线.png'
+import testerImage from '@/assets/level3/第三关/验电笔.png'
+import knifeImage from '@/assets/level3/第三关/美工刀.png'
+import cameraImage from '@/assets/level3/第三关/相机.png'
+import droneImage from '@/assets/level3/第三关/无人机.png'
+import tapeImage from '@/assets/level3/第三关/卷尺.png'
+import nylonImage from '@/assets/level3/第三关/尼龙手套.png'
+
+type GamePhase = 'start' | 'select' | 'operate'
+
+interface SelectTool {
+  id: string
+  name: string
+  image: string
+  correct: boolean
+  selected: boolean
+  selectedOrder: number
+}
+
+interface OperateArea {
+  id: string
+  active: boolean
+  style: Record<string, string>
+}
 
 const router = useRouter()
-const { phase, startLoading, startPlaying, completeLevel, failLevel, retry } = useLevel()
+const gamePhase = ref<GamePhase>('start')
+const toastText = ref('')
+const showVideoTip = ref(false)
+const workerChanged = ref(false)
+const levelComplete = ref(false)
+const selectedSlotsRef = ref<HTMLElement | null>(null)
+const selectOrderCounter = ref(0)
+let toastTimer: ReturnType<typeof setTimeout> | null = null
 
-const gamePhase = ref<'none' | 'select' | 'operate'>('none')
-const selectError = ref(false)
-const operationFeedback = ref('')
-
-// 所有可选工具
-const allTools = reactive([
-  { id: 'ticket', name: '工作票操作票', icon: '📋', correct: true, selected: false, showError: false },
-  { id: 'gloves', name: '绝缘手套', icon: '🧤', correct: true, selected: false, showError: false },
-  { id: 'nylon', name: '尼龙手套', icon: '🧤', correct: false, selected: false, showError: false },
-  { id: 'tester', name: '验电笔', icon: '🔍', correct: true, selected: false, showError: false },
-  { id: 'camera', name: '相机', icon: '📷', correct: false, selected: false, showError: false },
-  { id: 'ground', name: '接地线', icon: '🔗', correct: true, selected: false, showError: false },
-  { id: 'drone', name: '无人机', icon: '🚁', correct: false, selected: false, showError: false },
+const selectTools = reactive<SelectTool[]>([
+  { id: 'ground', name: '接地线', image: groundImage, correct: true, selected: false, selectedOrder: 0 },
+  { id: 'tester', name: '验电笔', image: testerImage, correct: true, selected: false, selectedOrder: 0 },
+  { id: 'knife', name: '美工刀', image: knifeImage, correct: false, selected: false, selectedOrder: 0 },
+  { id: 'camera', name: '相机', image: cameraImage, correct: false, selected: false, selectedOrder: 0 },
+  { id: 'drone', name: '无人机', image: droneImage, correct: false, selected: false, selectedOrder: 0 },
+  { id: 'tape', name: '卷尺', image: tapeImage, correct: false, selected: false, selectedOrder: 0 },
+  { id: 'gloves', name: '绝缘手套', image: glovesImage, correct: true, selected: false, selectedOrder: 0 },
+  { id: 'ticket', name: '工作票操作票', image: ticketImage, correct: true, selected: false, selectedOrder: 0 },
+  { id: 'nylon', name: '尼龙手套', image: nylonImage, correct: false, selected: false, selectedOrder: 0 },
 ])
 
-const selectedTools = computed(() => allTools.filter((t) => t.selected && t.correct))
-const allCorrectSelected = computed(() => {
-  const correctOnes = allTools.filter((t) => t.correct)
-  return correctOnes.every((t) => t.selected)
+const selectedTools = computed(() =>
+  selectTools
+    .filter((tool) => tool.selected && tool.correct)
+    .sort((a, b) => a.selectedOrder - b.selectedOrder)
+)
+
+const operateAreas = reactive<OperateArea[]>([
+  { id: 'topLeft', active: false, style: { left: '4%', top: '13%', width: '13%', height: '7%' } },
+  { id: 'middle', active: false, style: { left: '43%', top: '29%', width: '16%', height: '7%' } },
+  { id: 'right', active: false, style: { left: '84%', top: '62%', width: '13%', height: '8%' } },
+  { id: 'bottomRight', active: false, style: { left: '50%', top: '68%', width: '13%', height: '8%' } },
+])
+
+const completedOperateAreas = reactive({
+  right: false,
+  middle: false,
+  bottomRight: false,
 })
 
-function onToolClick(tool: typeof allTools[0]) {
-  if (tool.correct) {
-    tool.selected = !tool.selected
-    selectError.value = false
-  } else {
-    tool.showError = true
-    selectError.value = true
-    setTimeout(() => { tool.showError = false }, 1000)
-  }
-}
-
-function enterToolSelect() {
-  startPlaying()
-  gamePhase.value = 'select'
-}
-
-function enterOperation() {
-  gamePhase.value = 'operate'
-}
-
-// 操作阶段
-const steps = [
-  { id: 'gloves', target: 'switch', hint: '步骤1：拖动绝缘手套至刀闸完成拉闸', feedback: '✅ 拉闸完成' },
-  { id: 'tester', target: 'switch', hint: '步骤2：拖动验电笔至刀闸验电', feedback: '✅ 设备无电' },
-  { id: 'ground', target: 'ground', hint: '步骤3：拖动接地线至刀闸线路侧', feedback: '🎉 闯关成功！' },
-]
-
-const stepIndex = ref(0)
-const currentStep = computed(() => steps[stepIndex.value]?.id ?? '')
-const currentHint = computed(() => steps[stepIndex.value]?.hint ?? '')
-
-const operateTools = reactive([
-  { id: 'gloves', name: '绝缘手套', icon: '🧤', used: false },
-  { id: 'tester', name: '验电笔', icon: '🔍', used: false },
-  { id: 'ground', name: '接地线', icon: '🔗', used: false },
-])
-
-const switchRef = ref<HTMLElement>()
-const groundRef = ref<HTMLElement>()
+const areaRefs = new Map<string, HTMLElement>()
+const draggingId = ref('')
 const dragOffsets = reactive<Record<string, { x: number; y: number }>>({})
-const draggingId = ref<string | null>(null)
+const selectDragState = reactive({
+  active: false,
+  toolId: '',
+  image: '',
+  x: 0,
+  y: 0,
+})
 
-function getDragStyle(id: string) {
-  if (draggingId.value !== id || !dragOffsets[id]) return {}
-  return {
-    transform: `translate(${dragOffsets[id].x}px, ${dragOffsets[id].y}px) scale(1.1)`,
-    zIndex: 100,
-    transition: 'none',
+function trySelectTool(tool: SelectTool) {
+  if (!tool.correct) {
+    showToast('请选择正确的安全工器具')
+    return
+  }
+
+  if (tool.selected) {
+    tool.selected = false
+    tool.selectedOrder = 0
+    return
+  }
+
+  if (selectedTools.value.length >= 4) {
+    showToast('设备栏只能选择 4 个设备')
+    return
+  }
+
+  tool.selected = true
+  tool.selectedOrder = ++selectOrderCounter.value
+  if (selectedTools.value.length === 4) {
+    setTimeout(() => {
+      gamePhase.value = 'operate'
+    }, 250)
   }
 }
 
-function onOperateDrag(e: TouchEvent | MouseEvent, tool: typeof operateTools[0]) {
-  if (tool.used) return
-  const pos = 'touches' in e ? e.touches[0] : e
-  const startX = pos.clientX
-  const startY = pos.clientY
-  draggingId.value = tool.id
-  dragOffsets[tool.id] = { x: 0, y: 0 }
+function onSelectDragStart(e: TouchEvent | MouseEvent, tool: SelectTool) {
+  const start = getPointer(e)
+  selectDragState.active = true
+  selectDragState.toolId = tool.id
+  selectDragState.image = tool.image
+  selectDragState.x = start.clientX
+  selectDragState.y = start.clientY
 
   const onMove = (ev: TouchEvent | MouseEvent) => {
     ev.preventDefault()
-    const p = 'touches' in ev ? ev.touches[0] : ev
-    dragOffsets[tool.id] = { x: p.clientX - startX, y: p.clientY - startY }
+    const point = getPointer(ev)
+    selectDragState.x = point.clientX
+    selectDragState.y = point.clientY
   }
 
   const onEnd = (ev: TouchEvent | MouseEvent) => {
+    const point = getPointer(ev)
+    const slotsRect = selectedSlotsRef.value?.getBoundingClientRect()
+    if (
+      slotsRect &&
+      point.clientX >= slotsRect.left &&
+      point.clientX <= slotsRect.right &&
+      point.clientY >= slotsRect.top &&
+      point.clientY <= slotsRect.bottom
+    ) {
+      trySelectTool(tool)
+    }
+
+    selectDragState.active = false
+    selectDragState.toolId = ''
     document.removeEventListener('touchmove', onMove)
     document.removeEventListener('touchend', onEnd)
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onEnd)
-
-    const p = 'changedTouches' in ev ? ev.changedTouches[0] : ev
-    handleOperationDrop(tool, p.clientX, p.clientY)
-    draggingId.value = null
-    delete dragOffsets[tool.id]
   }
 
   document.addEventListener('touchmove', onMove, { passive: false })
@@ -240,276 +279,498 @@ function onOperateDrag(e: TouchEvent | MouseEvent, tool: typeof operateTools[0])
   document.addEventListener('mouseup', onEnd)
 }
 
-function handleOperationDrop(tool: typeof operateTools[0], x: number, y: number) {
-  const expected = steps[stepIndex.value]
-  if (!expected) return
-
-  // 检查是否是正确的工具
-  if (tool.id !== expected.id) {
-    showFeedback('⚠️ 操作顺序错误！')
-    setTimeout(() => failLevel(), 1200)
-    return
-  }
-
-  // 检查是否拖到了正确的目标
-  const targetMap: Record<string, HTMLElement | undefined> = {
-    switch: switchRef.value,
-    ground: groundRef.value,
-  }
-  const targetEl = targetMap[expected.target]
-  if (!targetEl || !isOverTarget({ x, y }, targetEl, 50)) {
-    showFeedback('请拖拽到正确的位置')
-    return
-  }
-
-  // 操作成功
-  tool.used = true
-  showFeedback(expected.feedback)
-
-  if (stepIndex.value >= steps.length - 1) {
-    setTimeout(() => completeLevel(), 1000)
-  } else {
-    stepIndex.value++
+function setAreaRef(id: string, el: Element | null) {
+  if (el instanceof HTMLElement) {
+    areaRefs.set(id, el)
   }
 }
 
-function showFeedback(msg: string) {
-  operationFeedback.value = msg
-  setTimeout(() => { operationFeedback.value = '' }, 2000)
+function getDragStyle(id: string) {
+  const offset = dragOffsets[id]
+  if (draggingId.value !== id || !offset) return {}
+  return {
+    transform: `translate(${offset.x}px, ${offset.y}px) scale(1.06)`,
+    zIndex: 80,
+    transition: 'none',
+  }
 }
 
-function retryAll() {
-  gamePhase.value = 'none'
-  stepIndex.value = 0
-  selectError.value = false
-  allTools.forEach((t) => { t.selected = false; t.showError = false })
-  operateTools.forEach((t) => { t.used = false })
-  retry()
+function onOperateDragStart(e: TouchEvent | MouseEvent, tool: SelectTool) {
+  const start = getPointer(e)
+  draggingId.value = tool.id
+  dragOffsets[tool.id] = { x: 0, y: 0 }
+
+  const onMove = (ev: TouchEvent | MouseEvent) => {
+    ev.preventDefault()
+    const point = getPointer(ev)
+    dragOffsets[tool.id] = {
+      x: point.clientX - start.clientX,
+      y: point.clientY - start.clientY,
+    }
+  }
+
+  const onEnd = (ev: TouchEvent | MouseEvent) => {
+    const point = getPointer(ev)
+    handleToolDrop(tool, point.clientX, point.clientY)
+    draggingId.value = ''
+    delete dragOffsets[tool.id]
+    document.removeEventListener('touchmove', onMove)
+    document.removeEventListener('touchend', onEnd)
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onEnd)
+  }
+
+  document.addEventListener('touchmove', onMove, { passive: false })
+  document.addEventListener('touchend', onEnd)
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onEnd)
+}
+
+function handleToolDrop(tool: SelectTool, x: number, y: number) {
+  const targetArea = operateAreas.find((area) => {
+    const el = areaRefs.get(area.id)
+    if (!el) return false
+    const rect = el.getBoundingClientRect()
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+  })
+
+  if (!targetArea) return
+
+  if (targetArea.id === 'right' && tool.id === 'gloves') {
+    targetArea.active = true
+    completedOperateAreas.right = true
+    showVideoTip.value = true
+    checkOperateComplete()
+    return
+  }
+
+  if (targetArea.id === 'middle' && tool.id === 'tester') {
+    targetArea.active = true
+    completedOperateAreas.middle = true
+    showToast('验电成功，电压 0V')
+    checkOperateComplete()
+    return
+  }
+
+  if (targetArea.id === 'bottomRight' && tool.id === 'ticket') {
+    targetArea.active = true
+    completedOperateAreas.bottomRight = true
+    workerChanged.value = true
+    showToast('工作票操作票确认完成')
+    checkOperateComplete()
+    return
+  }
+
+  showToast('错误区域')
+}
+
+function checkOperateComplete() {
+  if (completedOperateAreas.right && completedOperateAreas.middle && completedOperateAreas.bottomRight) {
+    levelComplete.value = true
+    showToast('全部操作完成')
+  }
+}
+
+function getPointer(e: TouchEvent | MouseEvent) {
+  if (e instanceof TouchEvent) {
+    return e.changedTouches[0] || e.touches[0]
+  }
+  return e
+}
+
+function showToast(text: string) {
+  if (toastTimer) clearTimeout(toastTimer)
+  toastText.value = text
+  toastTimer = setTimeout(() => {
+    toastText.value = ''
+  }, 1400)
 }
 
 function goHome() {
   router.push('/')
 }
-
-onMounted(() => {
-  startLoading(1500)
-})
 </script>
 
 <style lang="scss" scoped>
 .level3 {
-  background: $color-bg-start;
+  background-image: url('@/assets/level2/第二关/all_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
-.game-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: $spacing-md;
-  gap: $spacing-md;
-  overflow-y: auto;
+.level3--operate {
+  background-image: none;
 }
 
-.phase-title {
-  font-size: $font-size-lg;
-  font-weight: 700;
-  text-align: center;
-  color: $color-text;
-  padding-top: $spacing-md;
-}
-
-// 工具选择网格
-.tool-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: $spacing-sm;
-}
-
-.select-tool {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: $spacing-xs;
-  padding: $spacing-md $spacing-sm;
-  background: $color-bg-card;
-  border-radius: $radius-md;
-  box-shadow: $shadow-card;
-  border: 2px solid transparent;
-  position: relative;
-  cursor: pointer;
-  transition: all $duration-fast ease;
-
-  &--correct {
-    border-color: $color-success;
-    background: rgba($color-success, 0.05);
-  }
-
-  &--wrong {
-    border-color: $color-danger;
-    animation: shake 0.5s ease;
-  }
-}
-
-.select-icon { font-size: 32px; }
-.select-name {
-  font-size: $font-size-xs;
-  color: $color-text;
-  text-align: center;
-  font-weight: 600;
-}
-
-.check-mark {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 20px;
-  height: 20px;
-  background: $color-success;
-  color: #fff;
-  border-radius: 50%;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.selected-bar {
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: $radius-sm;
-  padding: $spacing-sm $spacing-md;
-}
-
-.selected-label {
-  font-size: $font-size-sm;
-  color: $color-text-light;
-  margin-bottom: $spacing-xs;
-}
-
-.selected-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: $spacing-xs;
-}
-
-.selected-tag {
-  background: rgba($color-primary, 0.1);
-  color: $color-primary;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: $font-size-xs;
-}
-
-.empty-hint {
-  font-size: $font-size-xs;
-  color: $color-text-light;
-}
-
-.error-tip {
-  text-align: center;
-  color: $color-danger;
-  font-size: $font-size-sm;
-  font-weight: 600;
-}
-
-// 操作场景
-.scene-area { flex: 1; }
-
-.switch-scene {
+.start-screen,
+.select-screen,
+.operate-screen {
   width: 100%;
   height: 100%;
   position: relative;
 }
 
-.scene-bg {
-  width: 100%;
-  min-height: 220px;
-  background: #F0EDEA;
-  border-radius: $radius-md;
-  padding: $spacing-md;
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-md;
-  position: relative;
-}
-
-.scene-element {
-  background: rgba(255, 255, 255, 0.8);
-  border: 2px dashed rgba(0, 0, 0, 0.15);
-  border-radius: $radius-sm;
-  padding: $spacing-md;
-  text-align: center;
-}
-
-.element-label {
-  font-size: $font-size-sm;
-  font-weight: 600;
-}
-
-.supervisor {
-  position: absolute;
-  right: $spacing-md;
-  top: $spacing-md;
-}
-
-.operation-hint {
-  text-align: center;
-  padding: $spacing-sm;
-  font-size: $font-size-sm;
-  color: $color-primary;
-  font-weight: 600;
-}
-
-.operation-feedback {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.8);
-  color: #fff;
-  padding: $spacing-md $spacing-xl;
-  border-radius: $radius-lg;
-  font-size: $font-size-lg;
-  font-weight: 700;
-  z-index: 50;
-}
-
-// 操作装备栏
-.operate-toolbar {
-  display: flex;
-  gap: $spacing-md;
-  justify-content: center;
-  padding: $spacing-md 0;
-}
-
-.operate-tool {
+.start-screen {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: $spacing-sm $spacing-md;
-  background: $color-bg-card;
-  border-radius: $radius-sm;
-  box-shadow: $shadow-card;
-  cursor: grab;
-  touch-action: none;
-  transition: all $duration-fast ease;
+  justify-content: center;
+  padding: max(18px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+}
+
+.lesson-img {
+  width: min(92vw, 390px);
+  display: block;
+  pointer-events: none;
+}
+
+.start-btn {
+  width: min(48vw, 190px);
+  margin-top: -24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+
+  img {
+    width: 100%;
+    display: block;
+  }
+}
+
+.select-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: max(10px, env(safe-area-inset-top)) 10px max(142px, env(safe-area-inset-bottom));
+}
+
+.select-panel {
   position: relative;
-
-  &--used {
-    opacity: 0.3;
-    pointer-events: none;
-  }
-
-  &--active {
-    box-shadow: 0 0 0 2px $color-primary;
-  }
-
-  &:active { cursor: grabbing; }
+  width: min(90vw, 380px);
+  aspect-ratio: 1402 / 2020;
+  max-height: calc(100dvh - 168px - env(safe-area-inset-top));
+  flex-shrink: 0;
 }
 
-.tool-icon { font-size: 28px; }
-.tool-name {
+.select-bg {
+  width: 100%;
+  height: auto;
+  display: block;
+  pointer-events: none;
+}
+
+.selected-panel-bg,
+.operate-bg,
+.operate-tool-bg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+.select-bg {
+  height: 80%;
+}
+
+.close-btn {
+  position: absolute;
+  top: 6.8%;
+  right: -5.5%;
+  width: 12%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+
+  img {
+    width: 100%;
+    display: block;
+  }
+}
+
+.select-grid {
+  position: absolute;
+  left: 10.8%;
+  right: 10.8%;
+  top: 16.5%;
+  height: 54.5%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 5.8% 6.5%;
+}
+
+.select-tool {
+  position: relative;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform $duration-fast ease, filter $duration-fast ease;
+
+  &:active {
+    transform: scale(0.96);
+  }
+}
+
+.select-tool--selected {
+  filter: drop-shadow(0 0 8px rgba(24, 178, 35, 0.95));
+}
+
+.select-tool-bg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.select-tool-icon {
+  position: absolute;
+  left: 15%;
+  top: 12%;
+  width: 70%;
+  height: 54%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.select-tool-name {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  bottom: 8%;
+  color: #623a13;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  pointer-events: none;
+}
+
+.selected-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: min(100vw, 430px);
+  aspect-ratio: 1500 / 326;
+  transform: translateX(-50%);
+  flex-shrink: 0;
+}
+
+.selected-slots {
+  position: absolute;
+  left: 6.8%;
+  right: 6.8%;
+  top: -28%;
+  height: 76%;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4%;
+}
+
+.selected-slot,
+.operate-tool {
+  position: relative;
+  min-width: 0;
+}
+
+.selected-slot-bg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+.selected-slot-icon,
+.operate-tool-icon {
+  position: absolute;
+  left: 13%;
+  top: 12%;
+  width: 74%;
+  height: 64%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.select-drag-ghost {
+  position: fixed;
+  z-index: 120;
+  width: 72px;
+  height: 72px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.3));
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.operate-screen {
+  overflow: hidden;
+  background: #9ec4ea;
+}
+
+.operate-bg {
+  object-fit: cover;
+}
+
+.top-tip {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: 3%;
+  width: 75%;
+  max-width: 350px;
+  pointer-events: none;
+}
+
+.area-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.operate-area {
+  position: absolute;
+  background-image: url('@/assets/level3/第三关/area.gif');
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.operate-area--active {
+  opacity: 1;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.9));
+}
+
+.video-tip-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: auto;
+}
+
+.video-tip {
+  position: absolute;
+  top: 13%;
+  left: 50%;
+  width: min(46vw, 180px);
+  aspect-ratio: 16 / 9;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid #fff;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+
+  img {
+    width: 48%;
+    height: 70%;
+    object-fit: contain;
+  }
+}
+
+.worker-replace-tip {
+  position: absolute;
+  left: 38%;
+  top: 72%;
+  z-index: 35;
+  padding: 6px 12px;
+  border-radius: 14px;
+  color: #fff;
   font-size: $font-size-xs;
-  color: $color-text-light;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.58);
+  pointer-events: none;
 }
+
+.operate-tool-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 10.5%;
+}
+
+.operate-tools {
+  position: absolute;
+  left: 5%;
+  right: 6%;
+  top: -30%;
+  height: 84%;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4%;
+}
+
+.operate-tool {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.operate-tool-icon {
+  cursor: grab;
+  pointer-events: auto;
+  transition: transform $duration-fast ease;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.operate-close {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: 10px;
+  width: 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+
+  img {
+    width: 100%;
+    display: block;
+  }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  top: 18%;
+  z-index: 100;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  border-radius: 18px;
+  color: #fff;
+  font-size: $font-size-sm;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.72);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
+}
+
 </style>
