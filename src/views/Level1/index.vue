@@ -1,177 +1,203 @@
 <template>
   <div class="level1 page">
-    <!-- 加载阶段 -->
-    <GameLoading v-if="phase === 'loading'" />
-
-    <!-- 课堂讲解阶段 -->
-    <LessonDialog
-      v-if="phase === 'lesson'"
-      content="规范巡检是变电运维的核心技能。巡检需严格按照标准路线行进，借助红外测温仪细致排查设备隐患，发现缺陷问题及时拍照记录、上传报备。"
-      button-text="开始巡检"
-      @start="startPlaying"
-    />
-
-    <!-- 游戏阶段 -->
-    <div v-if="phase === 'playing'" class="game-area">
-      <!-- 变电站设备图片区域 -->
-      <div class="device-scene" ref="sceneRef">
-        <!-- 设备图片占位（后续替换为真实图片） -->
-        <div class="device-image">
-          <div class="device-placeholder">
-            <p>🏭 变电站设备图</p>
-            <p class="hint">将红外测温仪拖拽到设备上检测温度</p>
-          </div>
-
-          <!-- 热点区域（引流线夹 — 高温点） -->
-          <div
-            class="hotspot hotspot--danger"
-            ref="hotspotRef"
-            :class="{ 'hotspot--found': hotspotFound }"
-          >
-            <span v-if="thermalActive && isOverHotspot" class="temp-badge temp-badge--danger">
-              {{ hotspotTemp }}°C
-            </span>
-          </div>
-
-          <!-- 正常温度区域 -->
-          <div class="hotspot hotspot--normal" style="top: 30%; left: 20%">
-            <span v-if="thermalActive && thermalPos.near === 'normal1'" class="temp-badge">
-              {{ normalTemp1 }}°C
-            </span>
-          </div>
-
-          <!-- 红外测温仪叠加层 -->
-          <div
-            v-if="thermalActive"
-            class="thermal-overlay"
-            :style="thermalOverlayStyle"
-          >
-            <div class="thermal-circle">
-              <div class="thermal-crosshair">+</div>
-            </div>
-          </div>
-        </div>
+    <div v-if="phase === 'start'" class="start-screen">
+      <div class="start-panel">
+        <img class="start-tip" :src="tipImage" alt="课堂说明" />
+        <img class="start-person" :src="personImage" alt="" />
       </div>
-
-      <!-- 装备栏 -->
-      <div class="toolbar-area">
-        <div class="tool-items">
-          <div
-            class="tool-btn"
-            :class="{ 'tool-btn--active': activeTool === 'thermal' }"
-            @touchstart.prevent="onToolDragStart($event, 'thermal')"
-            @mousedown.prevent="onToolDragStart($event, 'thermal')"
-          >
-            <span class="tool-icon">🌡️</span>
-            <span class="tool-label">红外测温仪</span>
-          </div>
-          <div
-            class="tool-btn"
-            :class="{ 'tool-btn--active': activeTool === 'camera', 'tool-btn--disabled': !hotspotFound }"
-            @click="onCameraClick"
-          >
-            <span class="tool-icon">📷</span>
-            <span class="tool-label">拍照</span>
-          </div>
-        </div>
-      </div>
+      <button class="start-button" type="button" @click="phase = 'playing'">
+        <img :src="startImage" alt="开始挑战" />
+      </button>
     </div>
 
-    <!-- 拍照上报弹窗 -->
-    <div v-if="showReport" class="report-overlay">
-      <div class="report-card card-pixar animate-bounce-in">
-        <div class="report-image">
-          <div class="report-thermal">
-            <p>🌡️ 红外测温图</p>
-            <p class="report-temp">温度：{{ capturedTemp }}°C</p>
+    <div v-else class="game-area">
+      <div class="game-board">
+        <img class="game-bg" :src="contentImage" alt="日常巡检" />
+        <button class="close-hit" type="button" aria-label="关闭" @click="goHome"></button>
+
+        <div ref="photoAreaRef" class="photo-area">
+          <div
+            v-for="point in temperaturePoints"
+            :key="`debug-${point.id}`"
+            class="debug-hit-area"
+            :style="getHitAreaStyle(point)"
+          >
+            {{ point.temperature }}°C
           </div>
+
+          <img
+            v-if="dragState.active && dragState.inPhotoArea"
+            class="meter-ghost"
+            :src="meterImage"
+            alt=""
+            :style="meterGhostStyle"
+          />
+
+          <template v-for="point in temperaturePoints" :key="point.id">
+            <img
+              v-if="point.found"
+              class="temperature-mark"
+              :class="`temperature-mark--${point.id}`"
+              :src="point.labelImage"
+              :alt="`${point.temperature}度`"
+              :style="point.labelStyle"
+            />
+            <img
+              v-if="point.id === 'hot' && point.found"
+              class="warning-mark"
+              :src="warningImage"
+              alt=""
+            />
+          </template>
         </div>
-        <p class="report-status" :class="capturedTemp >= 100 ? 'status-danger' : 'status-normal'">
-          {{ capturedTemp >= 100 ? '⚠️ 设备存在异常' : '设备温度正常' }}
-        </p>
-        <button class="btn-pixar" @click="submitReport">提交</button>
+
+        <div class="toolbar">
+          <button
+            class="tool-card tool-card--meter"
+            type="button"
+            @touchstart.prevent="onMeterDragStart"
+            @mousedown.prevent="onMeterDragStart"
+          >
+            <img :src="meterToolImage" alt="测温仪" />
+          </button>
+          <button
+            :class="['tool-card', 'tool-card--camera', { 'tool-card--disabled': !canUseCamera }]"
+            type="button"
+            @click="openPreview"
+          >
+            <img :src="cameraToolImage" alt="照相机" />
+          </button>
+        </div>
       </div>
+
+      <Transition name="toast">
+        <div v-if="toastText" class="toast">{{ toastText }}</div>
+      </Transition>
     </div>
 
-    <!-- 结果弹窗 -->
-    <ResultModal
-      v-if="phase === 'success' || phase === 'failed'"
-      :success="phase === 'success'"
-      :message="phase === 'success' ? '成功发现设备异常并上报！' : '未找到发热点或未正确拍照上报'"
-      @retry="retry"
-      @next="goHome"
-    />
+    <div v-if="phase === 'preview'" class="preview-overlay" @click.self="phase = 'playing'">
+      <div class="preview-card">
+        <div class="preview-board">
+          <img class="preview-bg" :src="contentImage" alt="测温结果" />
+          <div class="preview-photo">
+            <img
+              v-for="point in temperaturePoints"
+              :key="point.id"
+              class="temperature-mark"
+              :class="`temperature-mark--${point.id}`"
+              :src="point.labelImage"
+              :alt="`${point.temperature}度`"
+              :style="point.labelStyle"
+            />
+            <img class="warning-mark" :src="warningImage" alt="" />
+          </div>
+        </div>
+        <button class="submit-button" type="button" @click="goHome">完成</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useLevel } from '@/composables/useLevel'
-import GameLoading from '@/components/GameLoading.vue'
-import LessonDialog from '@/components/LessonDialog.vue'
-import ResultModal from '@/components/ResultModal.vue'
+import tipImage from '@/assets/level1/第一大关/tishi.png'
+import personImage from '@/assets/level1/第一大关/person.png'
+import startImage from '@/assets/level1/第一大关/start.png'
+import contentImage from '@/assets/level1/第一大关/content.png'
+import meterToolImage from '@/assets/level1/第一大关/cewen.png'
+import cameraToolImage from '@/assets/level1/第一大关/photo.png'
+import meterImage from '@/assets/level1/第一大关/yiqi.png'
+import warningImage from '@/assets/level1/第一大关/warning.png'
+import temp102Image from '@/assets/level1/第一大关/102.png'
+import temp50Image from '@/assets/level1/第一大关/50.png'
+import temp20Image from '@/assets/level1/第一大关/20.png'
+
+type Phase = 'start' | 'playing' | 'preview'
+
+interface TemperaturePoint {
+  id: 'hot' | 'warm' | 'normal'
+  temperature: number
+  found: boolean
+  labelImage: string
+  hitArea: {
+    left: number
+    top: number
+    width: number
+    height: number
+  }
+  labelStyle: Record<string, string>
+}
 
 const router = useRouter()
-const { phase, startLoading, startPlaying, completeLevel, failLevel, retry: retryLevel } = useLevel()
+const phase = ref<Phase>('start')
+const photoAreaRef = ref<HTMLElement | null>(null)
+const toastText = ref('')
+let toastTimer: ReturnType<typeof setTimeout> | null = null
 
-// 工具状态
-const activeTool = ref<'thermal' | 'camera' | null>(null)
-const thermalActive = ref(false)
-const thermalPos = ref({ x: 0, y: 0, near: '' })
-const hotspotFound = ref(false)
-const isOverHotspot = ref(false)
-const showReport = ref(false)
-const capturedTemp = ref(0)
+const temperaturePoints = reactive<TemperaturePoint[]>([
+  {
+    id: 'hot',
+    temperature: 102,
+    found: false,
+    labelImage: temp102Image,
+    hitArea: { left: 0.25, top: 0.1, width: 0.18, height: 0.2 },
+    labelStyle: { left: '36%', top: '5%', width: '22%' },
+  },
+  {
+    id: 'warm',
+    temperature: 50,
+    found: false,
+    labelImage: temp50Image,
+    hitArea: { left: 0.21, top: 0.45, width: 0.22, height: 0.18 },
+    labelStyle: { left: '27%', top: '42%', width: '22%' },
+  },
+  {
+    id: 'normal',
+    temperature: 20,
+    found: false,
+    labelImage: temp20Image,
+    hitArea: { left: 0.77, top: 0.47, width: 0.17, height: 0.18 },
+    labelStyle: { left: '68.5%', top: '52%', width: '24%' },
+  },
+])
 
-// 温度数据
-const hotspotTemp = 105 // 引流线夹高温
-const normalTemp1 = 22
-
-const sceneRef = ref<HTMLElement>()
-const hotspotRef = ref<HTMLElement>()
-
-const thermalOverlayStyle = computed(() => ({
-  left: `${thermalPos.value.x - 50}px`,
-  top: `${thermalPos.value.y - 50}px`,
-}))
-
-onMounted(() => {
-  startLoading(1500)
+const dragState = reactive({
+  active: false,
+  inPhotoArea: false,
+  x: 0,
+  y: 0,
 })
 
-// 拖拽测温仪
-function onToolDragStart(_e: TouchEvent | MouseEvent, tool: string) {
-  if (tool !== 'thermal') return
-  activeTool.value = 'thermal'
-  thermalActive.value = true
+const canUseCamera = computed(() => temperaturePoints.every((point) => point.found))
+const meterGhostStyle = computed(() => ({
+  left: `${dragState.x}px`,
+  top: `${dragState.y}px`,
+}))
+
+function getHitAreaStyle(point: TemperaturePoint) {
+  return {
+    left: `${point.hitArea.left * 100}%`,
+    top: `${point.hitArea.top * 100}%`,
+    width: `${point.hitArea.width * 100}%`,
+    height: `${point.hitArea.height * 100}%`,
+  }
+}
+
+function onMeterDragStart(e: TouchEvent | MouseEvent) {
+  dragState.active = true
+  updateDragPosition(e)
 
   const onMove = (ev: TouchEvent | MouseEvent) => {
-    const pos = 'touches' in ev ? ev.touches[0] : ev
-    if (!sceneRef.value) return
-    const rect = sceneRef.value.getBoundingClientRect()
-    thermalPos.value = {
-      x: pos.clientX - rect.left,
-      y: pos.clientY - rect.top,
-      near: '',
-    }
-
-    // 检测是否在高温热点上
-    if (hotspotRef.value) {
-      const hr = hotspotRef.value.getBoundingClientRect()
-      const cx = pos.clientX
-      const cy = pos.clientY
-      isOverHotspot.value =
-        cx > hr.left - 20 && cx < hr.right + 20 &&
-        cy > hr.top - 20 && cy < hr.bottom + 20
-
-      if (isOverHotspot.value) {
-        hotspotFound.value = true
-      }
-    }
+    ev.preventDefault()
+    updateDragPosition(ev)
   }
 
-  const onEnd = () => {
+  const onEnd = (ev: TouchEvent | MouseEvent) => {
+    updateDragPosition(ev)
+    measurePoint()
+    dragState.active = false
+    dragState.inPhotoArea = false
     document.removeEventListener('touchmove', onMove)
     document.removeEventListener('touchend', onEnd)
     document.removeEventListener('mousemove', onMove)
@@ -184,32 +210,66 @@ function onToolDragStart(_e: TouchEvent | MouseEvent, tool: string) {
   document.addEventListener('mouseup', onEnd)
 }
 
-function onCameraClick() {
-  if (!hotspotFound.value) {
-    // 没找到发热点就拍照 → 失败
-    capturedTemp.value = normalTemp1
-    showReport.value = true
+function updateDragPosition(e: TouchEvent | MouseEvent) {
+  const point = getPointer(e)
+  const rect = photoAreaRef.value?.getBoundingClientRect()
+  if (!rect) return
+
+  dragState.inPhotoArea =
+    point.clientX >= rect.left &&
+    point.clientX <= rect.right &&
+    point.clientY >= rect.top &&
+    point.clientY <= rect.bottom
+  dragState.x = point.clientX - rect.left
+  dragState.y = point.clientY - rect.top
+}
+
+function getPointer(e: TouchEvent | MouseEvent) {
+  if (e instanceof TouchEvent) {
+    return e.changedTouches[0] || e.touches[0]
+  }
+  return e
+}
+
+function measurePoint() {
+  const rect = photoAreaRef.value?.getBoundingClientRect()
+  if (!rect || !dragState.inPhotoArea) return
+
+  const xRatio = dragState.x / rect.width
+  const yRatio = dragState.y / rect.height
+  const target = temperaturePoints.find((point) => {
+    const area = point.hitArea
+    return (
+      !point.found &&
+      xRatio >= area.left &&
+      xRatio <= area.left + area.width &&
+      yRatio >= area.top &&
+      yRatio <= area.top + area.height
+    )
+  })
+
+  if (target) {
+    target.found = true
+    showToast(`${target.temperature}°C`)
+  } else {
+    showToast('未检测到测温点')
+  }
+}
+
+function openPreview() {
+  if (!canUseCamera.value) {
+    showToast('请先完成三个测温点')
     return
   }
-  capturedTemp.value = hotspotTemp
-  showReport.value = true
+  phase.value = 'preview'
 }
 
-function submitReport() {
-  showReport.value = false
-  if (capturedTemp.value >= 100) {
-    completeLevel()
-  } else {
-    failLevel()
-  }
-}
-
-function retry() {
-  hotspotFound.value = false
-  isOverHotspot.value = false
-  thermalActive.value = false
-  capturedTemp.value = 0
-  retryLevel()
+function showToast(text: string) {
+  if (toastTimer) clearTimeout(toastTimer)
+  toastText.value = text
+  toastTimer = setTimeout(() => {
+    toastText.value = ''
+  }, 1200)
 }
 
 function goHome() {
@@ -219,221 +279,271 @@ function goHome() {
 
 <style lang="scss" scoped>
 .level1 {
-  background: linear-gradient(180deg, #e8f0fe 0%, #d0e2f7 100%);
+  background-image: url('@/assets/level1/第一大关/bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
+.start-screen,
 .game-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.device-scene {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-}
-
-.device-image {
   width: 100%;
   height: 100%;
   position: relative;
-  background: linear-gradient(180deg, #c5d5e8 0%, #a8bdd4 100%);
 }
 
-.device-placeholder {
-  position: absolute;
-  inset: 0;
+.start-screen {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: $color-text-light;
-  font-size: $font-size-lg;
-
-  .hint {
-    font-size: $font-size-sm;
-    margin-top: $spacing-sm;
-    opacity: 0.7;
-  }
+  padding: max(18px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
 }
 
-// 热点区域
-.hotspot {
-  position: absolute;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  // 默认不可见，只有测温仪靠近才显示温度
-  &--danger {
-    top: 55%;
-    right: 25%;
-  }
-
-  &--normal {
-    top: 30%;
-    left: 20%;
-  }
-
-  &--found {
-    background: rgba(255, 0, 0, 0.1);
-    border: 2px dashed rgba(255, 0, 0, 0.3);
-  }
+.start-panel {
+  position: relative;
+  width: min(92vw, 390px);
+  aspect-ratio: 1401 / 1648;
 }
 
-.temp-badge {
-  position: absolute;
-  top: -30px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.7);
-  color: #4ade80;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: $font-size-sm;
-  font-weight: 700;
-  white-space: nowrap;
-
-  &--danger {
-    color: #ff4444;
-    background: rgba(255, 0, 0, 0.15);
-    border: 1px solid rgba(255, 0, 0, 0.3);
-  }
-}
-
-// 红外测温叠加层
-.thermal-overlay {
-  position: absolute;
-  width: 100px;
-  height: 100px;
+.start-tip {
+  width: 100%;
+  display: block;
   pointer-events: none;
-  z-index: 10;
 }
 
-.thermal-circle {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 100, 0, 0.6);
-  background: radial-gradient(circle, rgba(255, 100, 0, 0.15) 0%, transparent 70%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.start-person {
+  position: absolute;
+  right: -2%;
+  bottom: -8%;
+  width: 34%;
+  pointer-events: none;
 }
 
-.thermal-crosshair {
-  color: rgba(255, 100, 0, 0.8);
-  font-size: 24px;
-  font-weight: 300;
-}
+.start-button {
+  position: relative;
+  z-index: 2;
+  width: min(56vw, 230px);
+  margin-top: -4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
 
-// 装备栏
-.toolbar-area {
-  height: $toolbar-height;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  padding: $spacing-sm $spacing-md;
-  padding-bottom: max($spacing-sm, env(safe-area-inset-bottom));
-}
-
-.tool-items {
-  display: flex;
-  gap: $spacing-md;
-  height: 100%;
-  align-items: center;
-  justify-content: center;
-}
-
-.tool-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: $spacing-sm $spacing-md;
-  border-radius: $radius-sm;
-  background: rgba($color-primary, 0.05);
-  border: 2px solid transparent;
-  cursor: grab;
-  touch-action: none;
-  transition: all $duration-fast ease;
-
-  &--active {
-    border-color: $color-primary;
-    background: rgba($color-primary, 0.1);
-  }
-
-  &--disabled {
-    opacity: 0.4;
-    pointer-events: none;
+  img {
+    width: 100%;
+    display: block;
   }
 
   &:active {
-    transform: scale(0.95);
+    transform: scale(0.97);
   }
 }
 
-.tool-icon {
-  font-size: 28px;
-}
-
-.tool-label {
-  font-size: $font-size-xs;
-  color: $color-text-light;
-}
-
-// 拍照上报弹窗
-.report-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+.game-area {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
-  padding: $spacing-lg;
+  padding: max(8px, env(safe-area-inset-top)) 0 max(8px, env(safe-area-inset-bottom));
 }
 
-.report-card {
+.game-board {
+  position: relative;
+  width: min(100vw, calc(100dvh * 1500 / 2667));
+  max-height: 100%;
+  aspect-ratio: 1500 / 2667;
+}
+
+.game-bg {
   width: 100%;
-  max-width: 300px;
-  padding: $spacing-lg;
-  text-align: center;
+  height: 100%;
+  display: block;
+  pointer-events: none;
 }
 
-.report-image {
-  background: #1a1a2e;
-  border-radius: $radius-sm;
-  padding: $spacing-lg;
-  margin-bottom: $spacing-md;
+.close-hit {
+  position: absolute;
+  top: 13.2%;
+  right: 2%;
+  width: 11%;
+  aspect-ratio: 1;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
 }
 
-.report-thermal {
-  color: #ff6b35;
-  font-size: $font-size-base;
+.photo-area {
+  position: absolute;
+  left: 8.8%;
+  top: 22.58%;
+  width: 82.35%;
+  height: 46.76%;
+  overflow: hidden;
 }
 
-.report-temp {
-  font-size: $font-size-lg;
+.meter-ghost {
+  position: absolute;
+  width: 24%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.28));
+}
+
+.temperature-mark {
+  position: absolute;
+  z-index: 12;
+  height: auto;
+  pointer-events: none;
+}
+
+.warning-mark {
+  position: absolute;
+  left: 29%;
+  top: 10%;
+  width: 16%;
+  z-index: 11;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.toolbar {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.debug-hit-area {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed rgba(0, 180, 255, 0.95);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12px;
   font-weight: 700;
-  margin-top: $spacing-sm;
+  background: rgba(0, 150, 255, 0.18);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
 }
 
-.report-status {
+.tool-card {
+  position: absolute;
+  top: 75.62%;
+  width: 30.5%;
+  height: 13.2%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: grab;
+  pointer-events: auto;
+  transition: transform $duration-fast ease, opacity $duration-fast ease;
+
+  img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: contain;
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &--disabled {
+    opacity: 0.45;
+  }
+}
+
+.tool-card--meter {
+  left: 20.7%;
+}
+
+.tool-card--camera {
+  left: 54%;
+}
+
+.toast {
+  position: fixed;
+  top: 20%;
+  left: 50%;
+  z-index: 80;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  border-radius: 18px;
+  color: #fff;
+  font-size: $font-size-sm;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.72);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
+}
+
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.68);
+}
+
+.preview-card {
+  width: min(92vw, 390px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.preview-board {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1500 / 2667;
+}
+
+.preview-bg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.preview-photo {
+  position: absolute;
+  left: 8.8%;
+  top: 22.58%;
+  width: 82.35%;
+  height: 46.76%;
+  overflow: hidden;
+}
+
+.submit-button {
+  width: 120px;
+  height: 40px;
+  border: 0;
+  border-radius: 20px;
+  color: #fff;
   font-size: $font-size-base;
-  font-weight: 600;
-  margin-bottom: $spacing-lg;
-  padding: $spacing-sm;
-  border-radius: $radius-sm;
-}
-
-.status-danger {
-  color: $color-danger;
-  background: rgba($color-danger, 0.1);
-}
-
-.status-normal {
-  color: $color-success;
-  background: rgba($color-success, 0.1);
+  font-weight: 700;
+  background: #ff5a16;
+  box-shadow: 0 4px 0 #c53209;
+  cursor: pointer;
 }
 </style>
