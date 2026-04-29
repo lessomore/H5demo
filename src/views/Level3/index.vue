@@ -298,7 +298,7 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .level3 {
-  background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%);
+  background: $color-bg-start;
 }
 
 .game-area {
@@ -423,7 +423,7 @@ onMounted(() => {
 .scene-bg {
   width: 100%;
   min-height: 220px;
-  background: linear-gradient(180deg, #e2e8f0, #cbd5e0);
+  background: #F0EDEA;
   border-radius: $radius-md;
   padding: $spacing-md;
   display: flex;

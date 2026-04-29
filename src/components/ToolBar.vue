@@ -56,12 +56,9 @@ function onToolTouch(e: TouchEvent | MouseEvent, item: ToolItem) {
   right: 0;
   height: $toolbar-height;
   background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
   z-index: 50;
   padding: $spacing-sm $spacing-md;
-  // 安全区域适配
   padding-bottom: max($spacing-sm, env(safe-area-inset-bottom));
 }
 
@@ -80,10 +77,10 @@ function onToolTouch(e: TouchEvent | MouseEvent, item: ToolItem) {
 
 .tool-slot {
   flex-shrink: 0;
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   border-radius: $radius-sm;
-  border: 2px dashed rgba($color-primary, 0.2);
+  border: 2px dashed rgba(0, 0, 0, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -96,20 +93,18 @@ function onToolTouch(e: TouchEvent | MouseEvent, item: ToolItem) {
 
     &:active {
       cursor: grabbing;
-      transform: scale(1.1);
-      box-shadow: $shadow-float;
+      transform: scale(1.08);
     }
   }
 
   &--active {
     border-color: $color-accent;
-    background: rgba($color-accent, 0.1);
-    box-shadow: 0 0 0 3px rgba($color-accent, 0.2);
+    background: rgba($color-accent, 0.08);
   }
 }
 
 .tool-icon {
-  font-size: 28px;
+  font-size: 26px;
 }
 
 .tool-placeholder {

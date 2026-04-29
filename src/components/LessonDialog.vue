@@ -1,6 +1,6 @@
 <template>
   <div class="lesson-dialog" @click.self="$emit('close')">
-    <div class="lesson-card card-pixar animate-bounce-in">
+    <div class="lesson-card animate-bounce-in">
       <!-- 头像区域 -->
       <div class="lesson-header">
         <div class="avatar">
@@ -16,7 +16,7 @@
 
       <!-- 操作按钮 -->
       <div class="lesson-footer">
-        <button class="btn-pixar" @click="$emit('start')">
+        <button class="btn-primary" @click="$emit('start')">
           {{ buttonText }}
         </button>
       </div>
@@ -54,6 +54,9 @@ defineEmits<{
   width: 100%;
   max-width: 340px;
   padding: $spacing-lg;
+  background: $color-bg-card;
+  border-radius: $radius-md;
+  box-shadow: $shadow-float;
 }
 
 .lesson-header {
@@ -64,14 +67,13 @@ defineEmits<{
 }
 
 .avatar {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: linear-gradient(135deg, $color-primary-light, $color-primary);
+  background: $color-primary;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba($color-primary, 0.3);
 }
 
 .avatar-text {

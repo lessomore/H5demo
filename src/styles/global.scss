@@ -19,7 +19,7 @@ html, body {
   font-family: $font-family;
   font-size: $font-size-base;
   color: $color-text;
-  background: linear-gradient(180deg, $color-bg-start 0%, $color-bg-end 100%);
+  background: $color-bg-start;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -47,8 +47,8 @@ img {
   flex-direction: column;
 }
 
-// 皮克斯风格按钮
-.btn-pixar {
+// 扁平按钮
+.btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -58,28 +58,15 @@ img {
   font-size: $font-size-lg;
   font-weight: 700;
   color: $color-text-white;
-  background: linear-gradient(180deg, $color-accent 0%, $color-accent-dark 100%);
+  background: $color-accent;
   box-shadow: $shadow-button;
   cursor: pointer;
   transition: all $duration-fast ease;
-  position: relative;
-  top: 0;
   letter-spacing: 2px;
 
   &:active {
-    top: 2px;
-    box-shadow: $shadow-button-active;
-  }
-
-  &--primary {
-    background: linear-gradient(180deg, $color-primary-light 0%, $color-primary 100%);
-    box-shadow: 0 4px 0 #1a4971,
-                0 6px 12px rgba(0, 0, 0, 0.15);
-
-    &:active {
-      box-shadow: 0 2px 0 #1a4971,
-                  0 3px 6px rgba(0, 0, 0, 0.1);
-    }
+    transform: scale(0.97);
+    background: $color-accent-dark;
   }
 
   &:disabled {
@@ -88,12 +75,22 @@ img {
   }
 }
 
-// 皮克斯风格卡片
-.card-pixar {
+// 兼容旧类名
+.btn-pixar {
+  @extend .btn-primary;
+}
+
+// 卡片
+.card-flat {
   background: $color-bg-card;
   border-radius: $radius-md;
   box-shadow: $shadow-card;
   overflow: hidden;
+}
+
+// 兼容旧类名
+.card-pixar {
+  @extend .card-flat;
 }
 
 // 页面切换动画
