@@ -18,12 +18,14 @@
 
     <!-- 阶段2：拼图游戏页 -->
     <div v-if="gamePhase === 'playing'" class="game-area">
-      <img
-        class="close-btn"
-        src="@/assets/level2/第二关/close.png"
-        alt="关闭"
-        @click="goHome"
-      />
+      <button class="hint-btn" type="button" @click="showTipFromGame = true">提示</button>
+      <div class="game-guide-panel">
+        <img
+          class="close-btn"
+          src="@/assets/level2/第二关/close.png"
+          alt="关闭"
+          @click="goHome"
+        />
 
       <!-- 拼图区域：9 个切图绝对定位拼成 -->
       <div class="puzzle-area">
@@ -47,6 +49,8 @@
       </div>
 
       <!-- 提示浮层 -->
+      </div>
+
       <div v-if="showTipFromGame" class="tip-overlay" @click="showTipFromGame = false">
         <div class="tip-card animate-bounce-in">
           <p class="tip-title">完整巡检影像</p>
@@ -59,14 +63,14 @@
       <div class="material-area">
         <div class="material-panel">
           <img class="material-bg" src="@/assets/level2/第二关/swiper_bg.png" alt="" />
+          <img
+            class="swiper-arrow swiper-arrow--left"
+            src="@/assets/level2/第二关/swiper_change.png"
+            alt="上一页"
+            :class="{ 'swiper-arrow--disabled': materialPage === 0 }"
+            @click="materialPage = Math.max(0, materialPage - 1)"
+          />
           <div class="material-content">
-            <img
-              class="swiper-arrow swiper-arrow--left"
-              src="@/assets/level2/第二关/swiper_change.png"
-              alt="上一页"
-              :class="{ 'swiper-arrow--disabled': materialPage === 0 }"
-              @click="materialPage = Math.max(0, materialPage - 1)"
-            />
             <div class="material-grid">
               <div
                 v-for="mat in currentPageMaterials"
@@ -85,14 +89,14 @@
                 </div>
               </div>
             </div>
-            <img
-              class="swiper-arrow swiper-arrow--right"
-              src="@/assets/level2/第二关/swiper_change.png"
-              alt="下一页"
-              :class="{ 'swiper-arrow--disabled': materialPage >= maxPage }"
-              @click="materialPage = Math.min(maxPage, materialPage + 1)"
-            />
           </div>
+          <img
+            class="swiper-arrow swiper-arrow--right"
+            src="@/assets/level2/第二关/swiper_change.png"
+            alt="下一页"
+            :class="{ 'swiper-arrow--disabled': materialPage >= maxPage }"
+            @click="materialPage = Math.min(maxPage, materialPage + 1)"
+          />
         </div>
       </div>
 
@@ -181,12 +185,12 @@ interface Material {
 }
 
 const materials = reactive<Material[]>([
-  { id: 'c1', src: center1, fullSrc: center11, label: '中间1', targetSlotIndex: 0, placed: false },
   { id: 'c2', src: center2, fullSrc: center22, label: '中间2', targetSlotIndex: 1, placed: false },
-  { id: 'c3', src: center3, fullSrc: center33, label: '中间3', targetSlotIndex: 2, placed: false },
   { id: 'b1', src: bottom1, fullSrc: bottom11, label: '底部1', targetSlotIndex: 3, placed: false },
-  { id: 'b2', src: bottom2, fullSrc: bottom22, label: '底部2', targetSlotIndex: 4, placed: false },
+  { id: 'c3', src: center3, fullSrc: center33, label: '中间3', targetSlotIndex: 2, placed: false },
   { id: 'b3', src: bottom3, fullSrc: bottom33, label: '底部3', targetSlotIndex: 5, placed: false },
+  { id: 'c1', src: center1, fullSrc: center11, label: '中间1', targetSlotIndex: 0, placed: false },
+  { id: 'b2', src: bottom2, fullSrc: bottom22, label: '底部2', targetSlotIndex: 4, placed: false },
 ])
 
 const materialPage = ref(0)
@@ -450,35 +454,76 @@ onMounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
   position: relative;
   overflow: hidden;
+  padding: max($spacing-sm, env(safe-area-inset-top)) 0 max($spacing-sm, env(safe-area-inset-bottom));
+}
+
+.game-guide-panel {
+  position: relative;
+  width: min(86vw, 350px);
+  aspect-ratio: 1402 / 1648;
+  flex: 0 1 auto;
+  max-height: calc(100% - 138px);
+  background-image: url('@/assets/level2/第二关/pic_bg.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
 }
 
 .close-btn {
   position: absolute;
-  top: max($spacing-md, env(safe-area-inset-top));
-  left: $spacing-md;
-  width: 32px;
-  height: 32px;
-  z-index: 20;
+  top: 5%;
+  right: 5%;
+  width: 34px;
+  height: auto;
+  z-index: 30;
   cursor: pointer;
   pointer-events: auto;
 }
 
+.hint-btn {
+  position: absolute;
+  top: max($spacing-md, env(safe-area-inset-top));
+  left: $spacing-md;
+  z-index: 30;
+  min-width: 52px;
+  height: 28px;
+  border: 0;
+  border-radius: 14px;
+  color: #fff;
+  font-size: $font-size-sm;
+  font-weight: 700;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  pointer-events: auto;
+
+  &:active {
+    transform: scale(0.96);
+  }
+}
+
 // ===== 拼图区域 =====
 .puzzle-area {
-  flex: 1;
+  position: absolute;
+  left: 50%;
+  top: 17%;
+  z-index: 10;
+  width: 90%;
+  padding: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: $spacing-sm;
-  padding-top: max(40px, env(safe-area-inset-top));
+  transform: translateX(-50%);
+  background-image: url('@/assets/level2/第二关/area.png');
 }
 
 .puzzle-container {
   position: relative;
   width: 100%;
-  max-width: 360px;
   aspect-ratio: 1178 / 1174;
 }
 
@@ -514,14 +559,14 @@ onMounted(() => {
 
 // ===== 底部材料选择区域 =====
 .material-area {
-  padding: $spacing-sm;
-  padding-bottom: max($spacing-md, env(safe-area-inset-bottom));
+  width: 100%;
+  flex-shrink: 0;
+  padding: 0 $spacing-sm;
 }
 
 .material-panel {
   position: relative;
-  width: 100%;
-  max-width: 400px;
+  width: min(96vw, 430px);
   margin: 0 auto;
 }
 
@@ -537,29 +582,35 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 40px;
-  gap: 4px;
+  padding: 6px 34px;
 }
 
 .swiper-arrow {
-  width: 24px;
-  height: 24px;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
   cursor: pointer;
   pointer-events: auto;
-  flex-shrink: 0;
+  z-index: 5;
   transition: opacity $duration-fast ease;
   &--left {
-    transform: scaleX(-1);
+    left: 4px;
+    transform: translateY(-50%) scaleX(-1);
+  }
+  &--right {
+    right: 4px;
   }
   &--disabled {
     opacity: 0.3;
     pointer-events: none;
   }
   &:active {
-    transform: scale(0.9);
+    transform: translateY(-50%) scale(0.9);
   }
   &--left:active {
-    transform: scaleX(-1) scale(0.9);
+    transform: translateY(-50%) scaleX(-1) scale(0.9);
   }
 }
 
