@@ -8,6 +8,7 @@
     </div>
 
     <div v-else-if="gamePhase === 'select'" class="select-screen">
+      <img class="select-tip" :src="selectTipImage" alt="选择提示" />
       <div class="select-panel">
         <img class="select-bg" :src="selectBgImage" alt="选择设备" />
         <button class="close-btn" type="button" aria-label="关闭" @click="goHome">
@@ -59,7 +60,7 @@
 
     <div v-else class="operate-screen" @click="closeVideoTip">
       <img class="operate-bg" :src="wrapperImage" alt="操作场景" />
-      <img class="top-tip" :src="topTipImage" alt="操作提示" />
+      <img class="top-tip" :src="currentOperateTipImage" alt="操作提示" />
 
       <div class="area-layer">
         <div
@@ -128,6 +129,11 @@
 import { reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import ResultModal from '@/components/ResultModal.vue'
+import selectTipImage from '@/assets/level3/第三关/huamian2_tip.png'
+import operateTip1Image from '@/assets/level3/第三关/1_tip.png'
+import operateTip2Image from '@/assets/level3/第三关/2_tip.png'
+import operateTip3Image from '@/assets/level3/第三关/3_tip.png'
+import operateTip4Image from '@/assets/level3/第三关/4_tip.png'
 import startButtonImage from '@/assets/level2/第二关/start_btn.png'
 import tipImage from '@/assets/level3/第三关/tishi.png'
 import selectBgImage from '@/assets/level3/第三关/select_bg.png'
@@ -135,7 +141,6 @@ import selectItemBgImage from '@/assets/level3/第三关/selectitem_bg.png'
 import selectedItemImage from '@/assets/level3/第三关/selectItem.png'
 import toolBgImage from '@/assets/level3/第三关/tool_bg.png'
 import wrapperImage from '@/assets/level3/第三关/wrapper.png'
-import topTipImage from '@/assets/level3/第三关/top_tip.png'
 import closeImage from '@/assets/level3/第三关/close.png'
 import personNoImage from '@/assets/level3/第三关/person_no.png'
 import personImage from '@/assets/level3/第三关/person.png'
@@ -218,6 +223,11 @@ const operateSteps: OperateStep[] = [
   { toolId: 'ground', areaId: 'middle', areaKey: 'middle' },
 ]
 const operateStepIndex = ref(0)
+const operateTipImages = [operateTip1Image, operateTip2Image, operateTip3Image, operateTip4Image]
+const currentOperateTipImage = computed(() => {
+  const index = Math.min(operateStepIndex.value, operateTipImages.length - 1)
+  return operateTipImages[index]
+})
 
 const areaRefs = new Map<string, HTMLElement>()
 const draggingId = ref('')
@@ -485,6 +495,16 @@ function goHome() {
   padding: max(10px, env(safe-area-inset-top)) 10px max(142px, env(safe-area-inset-bottom));
 }
 
+.select-tip {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 46%;
+  z-index: 20;
+  width: min(80vw, 350px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
 .select-panel {
   position: relative;
   width: min(90vw, 380px);
@@ -661,10 +681,11 @@ function goHome() {
 
 .top-tip {
   position: absolute;
-  top: max(16px, env(safe-area-inset-top));
-  left: 3%;
-  width: 75%;
-  max-width: 350px;
+  top: max(12px, env(safe-area-inset-top));
+  left: 42%;
+  z-index: 32;
+  width: min(76vw, 320px);
+  transform: translateX(-50%);
   pointer-events: none;
 }
 
@@ -772,6 +793,7 @@ function goHome() {
   top: max(14px, env(safe-area-inset-top));
   right: 10px;
   width: 42px;
+  z-index: 40;
   padding: 0;
   border: 0;
   background: transparent;

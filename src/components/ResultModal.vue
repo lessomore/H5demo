@@ -61,6 +61,7 @@ const successBg = computed(() => {
   position: relative;
   width: min(82vw, 340px);
   aspect-ratio: 994 / 1109;
+  margin-top: -8vh;
 }
 
 .success-bg {

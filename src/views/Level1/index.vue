@@ -12,6 +12,7 @@
 
     <div v-else class="game-area">
       <div class="game-board">
+        <img class="top-operation-tip" :src="topOperationTipImage" alt="操作提示" />
         <img class="game-bg" :src="contentImage" alt="日常巡检" />
         <button class="close-hit" type="button" aria-label="关闭" @click="goHome"></button>
 
@@ -20,12 +21,16 @@
             <div
               class="thermal-window"
               :style="thermalWindowStyle"
+              @touchstart.prevent="onPlacedThermalDragStart"
+              @mousedown.prevent="onPlacedThermalDragStart"
             ></div>
             <img
               class="meter-ghost"
               :src="meterImage"
               alt=""
               :style="meterGhostStyle"
+              @touchstart.prevent="onPlacedThermalDragStart"
+              @mousedown.prevent="onPlacedThermalDragStart"
             />
             <div
               v-if="!currentHotArea"
@@ -93,6 +98,7 @@
 import { computed, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ResultModal from '@/components/ResultModal.vue'
+import topOperationTipImage from '@/assets/level1/第一大关/title_tip.png'
 import tipImage from '@/assets/level1/第一大关/tishi.png'
 import personImage from '@/assets/level1/第一大关/person.png'
 import startImage from '@/assets/level1/第一大关/start.png'
@@ -166,6 +172,16 @@ const normalTemperatureStyle = computed(() => ({
 function onMeterDragStart(e: TouchEvent | MouseEvent) {
   if (previewVisible.value || levelComplete.value) return
 
+  startMeterDrag(e)
+}
+
+function onPlacedThermalDragStart(e: TouchEvent | MouseEvent) {
+  if (!thermalLocked.value || previewVisible.value || levelComplete.value) return
+
+  startMeterDrag(e)
+}
+
+function startMeterDrag(e: TouchEvent | MouseEvent) {
   dragState.active = true
   thermalLocked.value = false
   updateDragPosition(e)
@@ -365,12 +381,23 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
+.top-operation-tip {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 18;
+  width: 92%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
 .close-hit {
   position: absolute;
   top: 13.2%;
   right: 2%;
   width: 11%;
   aspect-ratio: 1;
+  z-index: 20;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -390,7 +417,7 @@ onUnmounted(() => {
   position: absolute;
   inset: 0;
   z-index: 10;
-  background: rgba(0, 0, 0, 0.86);
+  background: rgba(0, 0, 0, 0.56);
 }
 
 .thermal-window {
@@ -399,8 +426,13 @@ onUnmounted(() => {
   border-radius: 50%;
   overflow: hidden;
   background-repeat: no-repeat;
-  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.82);
-  pointer-events: none;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.22);
+  cursor: grab;
+  pointer-events: auto;
+
+  &:active {
+    cursor: grabbing;
+  }
 }
 
 .meter-ghost {
@@ -408,8 +440,13 @@ onUnmounted(() => {
   width: 28%;
   transform: translate(-50%, -50%);
   z-index: 12;
-  pointer-events: none;
+  cursor: grab;
+  pointer-events: auto;
   filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.34));
+
+  &:active {
+    cursor: grabbing;
+  }
 }
 
 .temperature-mark {
