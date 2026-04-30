@@ -16,38 +16,33 @@
         <button class="close-hit" type="button" aria-label="关闭" @click="goHome"></button>
 
         <div ref="photoAreaRef" class="photo-area">
-          <div
-            v-for="point in temperaturePoints"
-            :key="`debug-${point.id}`"
-            class="debug-hit-area"
-            :style="getHitAreaStyle(point)"
-          >
-            {{ point.temperature }}°C
+          <div v-if="thermalVisible" class="thermal-scene">
+            <div
+              class="thermal-window"
+              :style="thermalWindowStyle"
+            ></div>
+            <img
+              class="meter-ghost"
+              :src="meterImage"
+              alt=""
+              :style="meterGhostStyle"
+            />
+            <div
+              v-if="!currentHotArea"
+              class="normal-temperature"
+              :style="normalTemperatureStyle"
+            >
+              {{ normalTemperature }}°C
+            </div>
           </div>
 
-          <img
-            v-if="dragState.active && dragState.inPhotoArea"
-            class="meter-ghost"
-            :src="meterImage"
-            alt=""
-            :style="meterGhostStyle"
-          />
-
-          <template v-for="point in temperaturePoints" :key="point.id">
+          <template v-if="thermalVisible && currentHotArea">
             <img
-              v-if="point.found"
-              class="temperature-mark"
-              :class="`temperature-mark--${point.id}`"
-              :src="point.labelImage"
-              :alt="`${point.temperature}度`"
-              :style="point.labelStyle"
+              class="temperature-mark temperature-mark--hot"
+              :src="temp62Image"
+              alt="62度"
             />
-            <img
-              v-if="point.id === 'hot' && point.found"
-              class="warning-mark"
-              :src="warningImage"
-              alt=""
-            />
+            <img class="warning-mark" :src="warningImage" alt="" />
           </template>
         </div>
 
@@ -61,11 +56,11 @@
             <img :src="meterToolImage" alt="测温仪" />
           </button>
           <button
-            :class="['tool-card', 'tool-card--camera', { 'tool-card--disabled': !canUseCamera }]"
+            :class="['tool-card', 'tool-card--photo', { 'tool-card--disabled': !canOpenPreview }]"
             type="button"
             @click="openPreview"
           >
-            <img :src="cameraToolImage" alt="照相机" />
+            <img :src="cameraToolImage" alt="拍照" />
           </button>
         </div>
       </div>
@@ -75,24 +70,12 @@
       </Transition>
     </div>
 
-    <div v-if="phase === 'preview'" class="preview-overlay" @click.self="phase = 'playing'">
+    <div v-if="previewVisible" class="preview-overlay" @click.self="previewVisible = false">
       <div class="preview-card">
-        <div class="preview-board">
-          <img class="preview-bg" :src="contentImage" alt="测温结果" />
-          <div class="preview-photo">
-            <img
-              v-for="point in temperaturePoints"
-              :key="point.id"
-              class="temperature-mark"
-              :class="`temperature-mark--${point.id}`"
-              :src="point.labelImage"
-              :alt="`${point.temperature}度`"
-              :style="point.labelStyle"
-            />
-            <img class="warning-mark" :src="warningImage" alt="" />
-          </div>
-        </div>
-        <button class="submit-button" type="button" @click="levelComplete = true">完成</button>
+        <img class="preview-success" :src="successImage" alt="检测成功" />
+        <button class="upload-button" type="button" @click="submitLevel">
+          <img :src="submitImage" alt="点击上传" />
+        </button>
       </div>
     </div>
 
@@ -107,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ResultModal from '@/components/ResultModal.vue'
 import tipImage from '@/assets/level1/第一大关/tishi.png'
@@ -117,85 +100,74 @@ import contentImage from '@/assets/level1/第一大关/content.png'
 import meterToolImage from '@/assets/level1/第一大关/cewen.png'
 import cameraToolImage from '@/assets/level1/第一大关/photo.png'
 import meterImage from '@/assets/level1/第一大关/yiqi.png'
+import infraredImage from '@/assets/level1/第一大关/hongwai.png'
+import submitImage from '@/assets/level1/第一大关/submit.png'
+import successImage from '@/assets/level1/第一大关/success.png'
 import warningImage from '@/assets/level1/第一大关/warning.png'
-import temp102Image from '@/assets/level1/第一大关/102.png'
-import temp50Image from '@/assets/level1/第一大关/50.png'
-import temp20Image from '@/assets/level1/第一大关/20.png'
+import temp62Image from '@/assets/level1/第一大关/62.png'
 
-type Phase = 'start' | 'playing' | 'preview'
-
-interface TemperaturePoint {
-  id: 'hot' | 'warm' | 'normal'
-  temperature: number
-  found: boolean
-  labelImage: string
-  hitArea: {
-    left: number
-    top: number
-    width: number
-    height: number
-  }
-  labelStyle: Record<string, string>
-}
+type Phase = 'start' | 'playing'
 
 const router = useRouter()
 const phase = ref<Phase>('start')
 const photoAreaRef = ref<HTMLElement | null>(null)
 const toastText = ref('')
+const hotDetected = ref(false)
+const currentHotArea = ref(false)
+const normalTemperature = ref(26)
+const previewVisible = ref(false)
 const levelComplete = ref(false)
+const thermalLocked = ref(false)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
-const temperaturePoints = reactive<TemperaturePoint[]>([
-  {
-    id: 'hot',
-    temperature: 102,
-    found: false,
-    labelImage: temp102Image,
-    hitArea: { left: 0.25, top: 0.1, width: 0.18, height: 0.2 },
-    labelStyle: { left: '36%', top: '5%', width: '22%' },
-  },
-  {
-    id: 'warm',
-    temperature: 50,
-    found: false,
-    labelImage: temp50Image,
-    hitArea: { left: 0.21, top: 0.45, width: 0.22, height: 0.18 },
-    labelStyle: { left: '27%', top: '42%', width: '22%' },
-  },
-  {
-    id: 'normal',
-    temperature: 20,
-    found: false,
-    labelImage: temp20Image,
-    hitArea: { left: 0.77, top: 0.47, width: 0.17, height: 0.18 },
-    labelStyle: { left: '68.5%', top: '52%', width: '24%' },
-  },
-])
+const hotArea = {
+  left: 0.25,
+  top: 0.1,
+  width: 0.18,
+  height: 0.2,
+}
 
 const dragState = reactive({
   active: false,
   inPhotoArea: false,
   x: 0,
   y: 0,
+  areaWidth: 0,
+  areaHeight: 0,
 })
 
-const canUseCamera = computed(() => temperaturePoints.every((point) => point.found))
+const thermalVisible = computed(() => (dragState.active && dragState.inPhotoArea) || thermalLocked.value)
+const canOpenPreview = computed(() => hotDetected.value && thermalLocked.value && currentHotArea.value)
 const meterGhostStyle = computed(() => ({
   left: `${dragState.x}px`,
   top: `${dragState.y}px`,
 }))
+const thermalWindowStyle = computed(() => {
+  const windowWidth = dragState.areaWidth * 0.28
+  const windowHeight = windowWidth
+  const left = dragState.x - windowWidth / 2
+  const top = dragState.y - windowHeight / 2
 
-function getHitAreaStyle(point: TemperaturePoint) {
   return {
-    left: `${point.hitArea.left * 100}%`,
-    top: `${point.hitArea.top * 100}%`,
-    width: `${point.hitArea.width * 100}%`,
-    height: `${point.hitArea.height * 100}%`,
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${windowWidth}px`,
+    height: `${windowHeight}px`,
+    backgroundImage: `url(${infraredImage})`,
+    backgroundSize: `${dragState.areaWidth}px ${dragState.areaHeight}px`,
+    backgroundPosition: `${-left}px ${-top}px`,
   }
-}
+})
+const normalTemperatureStyle = computed(() => ({
+  left: `${dragState.x}px`,
+  top: `${dragState.y}px`,
+}))
 
 function onMeterDragStart(e: TouchEvent | MouseEvent) {
+  if (previewVisible.value || levelComplete.value) return
+
   dragState.active = true
+  thermalLocked.value = false
   updateDragPosition(e)
 
   const onMove = (ev: TouchEvent | MouseEvent) => {
@@ -205,9 +177,11 @@ function onMeterDragStart(e: TouchEvent | MouseEvent) {
 
   const onEnd = (ev: TouchEvent | MouseEvent) => {
     updateDragPosition(ev)
-    measurePoint()
+    thermalLocked.value = dragState.inPhotoArea
+    if (!dragState.inPhotoArea) {
+      currentHotArea.value = false
+    }
     dragState.active = false
-    dragState.inPhotoArea = false
     document.removeEventListener('touchmove', onMove)
     document.removeEventListener('touchend', onEnd)
     document.removeEventListener('mousemove', onMove)
@@ -223,8 +197,10 @@ function onMeterDragStart(e: TouchEvent | MouseEvent) {
 function updateDragPosition(e: TouchEvent | MouseEvent) {
   const point = getPointer(e)
   const rect = photoAreaRef.value?.getBoundingClientRect()
-  if (!rect) return
+  if (!point || !rect) return
 
+  dragState.areaWidth = rect.width
+  dragState.areaHeight = rect.height
   dragState.inPhotoArea =
     point.clientX >= rect.left &&
     point.clientX <= rect.right &&
@@ -232,46 +208,59 @@ function updateDragPosition(e: TouchEvent | MouseEvent) {
     point.clientY <= rect.bottom
   dragState.x = point.clientX - rect.left
   dragState.y = point.clientY - rect.top
+
+  if (dragState.inPhotoArea) {
+    updateTemperatureState()
+  } else {
+    currentHotArea.value = false
+  }
 }
 
 function getPointer(e: TouchEvent | MouseEvent) {
-  if (e instanceof TouchEvent) {
+  if ('changedTouches' in e) {
     return e.changedTouches[0] || e.touches[0]
   }
   return e
 }
 
-function measurePoint() {
-  const rect = photoAreaRef.value?.getBoundingClientRect()
-  if (!rect || !dragState.inPhotoArea) return
+function updateTemperatureState() {
+  if (!dragState.areaWidth || !dragState.areaHeight) return
 
-  const xRatio = dragState.x / rect.width
-  const yRatio = dragState.y / rect.height
-  const target = temperaturePoints.find((point) => {
-    const area = point.hitArea
-    return (
-      !point.found &&
-      xRatio >= area.left &&
-      xRatio <= area.left + area.width &&
-      yRatio >= area.top &&
-      yRatio <= area.top + area.height
-    )
-  })
+  const xRatio = dragState.x / dragState.areaWidth
+  const yRatio = dragState.y / dragState.areaHeight
+  currentHotArea.value =
+    xRatio >= hotArea.left &&
+    xRatio <= hotArea.left + hotArea.width &&
+    yRatio >= hotArea.top &&
+    yRatio <= hotArea.top + hotArea.height
 
-  if (target) {
-    target.found = true
-    showToast(`${target.temperature}°C`)
+  if (currentHotArea.value) {
+    if (!hotDetected.value) {
+      showToast('已定位异常区域')
+    }
+    hotDetected.value = true
   } else {
-    showToast('未检测到测温点')
+    normalTemperature.value = getNormalTemperature(xRatio, yRatio)
   }
 }
 
+function getNormalTemperature(xRatio: number, yRatio: number) {
+  const value = Math.floor(((xRatio * 17 + yRatio * 23) % 1) * 11)
+  return 20 + value
+}
+
 function openPreview() {
-  if (!canUseCamera.value) {
-    showToast('请先完成三个测温点')
+  if (!canOpenPreview.value) {
+    showToast('请将测温仪停在异常区域')
     return
   }
-  phase.value = 'preview'
+
+  previewVisible.value = true
+}
+
+function submitLevel() {
+  previewVisible.value = false
+  levelComplete.value = true
 }
 
 function showToast(text: string) {
@@ -285,6 +274,10 @@ function showToast(text: string) {
 function goHome() {
   router.push('/')
 }
+
+onUnmounted(() => {
+  if (toastTimer) clearTimeout(toastTimer)
+})
 </script>
 
 <style lang="scss" scoped>
@@ -393,20 +386,43 @@ function goHome() {
   overflow: hidden;
 }
 
+.thermal-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.86);
+}
+
+.thermal-window {
+  position: absolute;
+  z-index: 11;
+  border-radius: 50%;
+  overflow: hidden;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.82);
+  pointer-events: none;
+}
+
 .meter-ghost {
   position: absolute;
-  width: 24%;
+  width: 28%;
   transform: translate(-50%, -50%);
-  z-index: 20;
+  z-index: 12;
   pointer-events: none;
-  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.28));
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.34));
 }
 
 .temperature-mark {
   position: absolute;
-  z-index: 12;
+  z-index: 14;
   height: auto;
   pointer-events: none;
+}
+
+.temperature-mark--hot {
+  left: 36%;
+  top: 5%;
+  width: 22%;
 }
 
 .warning-mark {
@@ -414,30 +430,33 @@ function goHome() {
   left: 29%;
   top: 10%;
   width: 16%;
-  z-index: 11;
+  z-index: 13;
   pointer-events: none;
   opacity: 0.9;
+}
+
+.normal-temperature {
+  position: absolute;
+  z-index: 14;
+  min-width: 56px;
+  padding: 5px 9px;
+  border: 2px solid rgba(255, 255, 255, 0.88);
+  border-radius: 14px;
+  color: #f8ffe8;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(31, 144, 200, 0.92), rgba(18, 86, 148, 0.92));
+  box-shadow: 0 0 12px rgba(42, 196, 255, 0.72), inset 0 0 8px rgba(255, 255, 255, 0.2);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
+  transform: translate(-50%, -170%);
 }
 
 .toolbar {
   position: absolute;
   inset: 0;
-  pointer-events: none;
-}
-
-.debug-hit-area {
-  position: absolute;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px dashed rgba(0, 180, 255, 0.95);
-  border-radius: 8px;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-  background: rgba(0, 150, 255, 0.18);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
   pointer-events: none;
 }
 
@@ -451,7 +470,7 @@ function goHome() {
   background: transparent;
   cursor: grab;
   pointer-events: auto;
-  transition: transform $duration-fast ease, opacity $duration-fast ease;
+  transition: transform $duration-fast ease, opacity $duration-fast ease, filter $duration-fast ease;
 
   img {
     width: 100%;
@@ -465,7 +484,8 @@ function goHome() {
   }
 
   &--disabled {
-    opacity: 0.45;
+    opacity: 0.48;
+    filter: grayscale(0.25);
   }
 }
 
@@ -473,7 +493,7 @@ function goHome() {
   left: 20.7%;
 }
 
-.tool-card--camera {
+.tool-card--photo {
   left: 54%;
 }
 
@@ -523,37 +543,27 @@ function goHome() {
   gap: 12px;
 }
 
-.preview-board {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1500 / 2667;
-}
-
-.preview-bg {
-  width: 100%;
-  height: 100%;
+.preview-success {
+  width: min(88vw, 360px);
   display: block;
+  pointer-events: none;
 }
 
-.preview-photo {
-  position: absolute;
-  left: 8.8%;
-  top: 22.58%;
-  width: 82.35%;
-  height: 46.76%;
-  overflow: hidden;
-}
-
-.submit-button {
-  width: 120px;
-  height: 40px;
+.upload-button {
+  width: min(42vw, 160px);
+  padding: 0;
   border: 0;
-  border-radius: 20px;
-  color: #fff;
-  font-size: $font-size-base;
-  font-weight: 700;
-  background: #ff5a16;
-  box-shadow: 0 4px 0 #c53209;
+  background: transparent;
   cursor: pointer;
+
+  img {
+    width: 100%;
+    display: block;
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
 }
+
 </style>
