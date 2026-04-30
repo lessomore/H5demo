@@ -57,7 +57,7 @@
 
     </div>
 
-    <div v-else class="operate-screen">
+    <div v-else class="operate-screen" @click="closeVideoTip">
       <img class="operate-bg" :src="wrapperImage" alt="操作场景" />
       <img class="top-tip" :src="topTipImage" alt="操作提示" />
 
@@ -159,6 +159,12 @@ interface OperateArea {
   style: Record<string, string>
 }
 
+interface OperateStep {
+  toolId: string
+  areaId: string
+  areaKey: 'right' | 'middle' | 'bottomRight'
+}
+
 const router = useRouter()
 const gamePhase = ref<GamePhase>('start')
 const toastText = ref('')
@@ -194,11 +200,13 @@ const operateAreas = reactive<OperateArea[]>([
   { id: 'bottomRight', active: false, style: { left: '50%', top: '68%', width: '13%', height: '8%' } },
 ])
 
-const completedOperateAreas = reactive({
-  right: false,
-  middle: false,
-  bottomRight: false,
-})
+const operateSteps: OperateStep[] = [
+  { toolId: 'ticket', areaId: 'bottomRight', areaKey: 'bottomRight' },
+  { toolId: 'gloves', areaId: 'right', areaKey: 'right' },
+  { toolId: 'tester', areaId: 'middle', areaKey: 'middle' },
+  { toolId: 'ground', areaId: 'middle', areaKey: 'middle' },
+]
+const operateStepIndex = ref(0)
 
 const areaRefs = new Map<string, HTMLElement>()
 const draggingId = ref('')
@@ -296,6 +304,7 @@ function getDragStyle(id: string) {
 }
 
 function onOperateDragStart(e: TouchEvent | MouseEvent, tool: SelectTool) {
+  showVideoTip.value = false
   const start = getPointer(e)
   draggingId.value = tool.id
   dragOffsets[tool.id] = { x: 0, y: 0 }
@@ -334,41 +343,51 @@ function handleToolDrop(tool: SelectTool, x: number, y: number) {
     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
   })
 
-  if (!targetArea) return
-
-  if (targetArea.id === 'right' && tool.id === 'gloves') {
-    targetArea.active = true
-    completedOperateAreas.right = true
-    showVideoTip.value = true
-    checkOperateComplete()
+  if (!targetArea) {
+    showToast('操作位置不正确')
     return
   }
 
-  if (targetArea.id === 'middle' && tool.id === 'tester') {
-    targetArea.active = true
-    completedOperateAreas.middle = true
-    showToast('验电成功，电压 0V')
-    checkOperateComplete()
+  const expected = operateSteps[operateStepIndex.value]
+  if (!expected) return
+
+  if (tool.id !== expected.toolId) {
+    showToast('操作顺序不正确')
     return
   }
 
-  if (targetArea.id === 'bottomRight' && tool.id === 'ticket') {
-    targetArea.active = true
-    completedOperateAreas.bottomRight = true
-    workerChanged.value = true
+  if (targetArea.id !== expected.areaId) {
+    showToast('操作位置不正确')
+    return
+  }
+
+  targetArea.active = true
+  operateStepIndex.value += 1
+
+  if (expected.toolId === 'ticket') {
     showToast('工作票操作票确认完成')
-    checkOperateComplete()
-    return
+  } else if (expected.toolId === 'gloves') {
+    showVideoTip.value = true
+    workerChanged.value = true
+    showToast('绝缘手套操作完成')
+  } else if (expected.toolId === 'tester') {
+    showToast('设备无电')
+  } else if (expected.toolId === 'ground') {
+    showToast('接地线操作完成')
   }
 
-  showToast('错误区域')
+  checkOperateComplete()
 }
 
 function checkOperateComplete() {
-  if (completedOperateAreas.right && completedOperateAreas.middle && completedOperateAreas.bottomRight) {
+  if (operateStepIndex.value >= operateSteps.length) {
     levelComplete.value = true
     showToast('全部操作完成')
   }
+}
+
+function closeVideoTip() {
+  showVideoTip.value = false
 }
 
 function getPointer(e: TouchEvent | MouseEvent) {
@@ -652,10 +671,13 @@ function goHome() {
 }
 
 .video-tip-mask {
-  position: fixed;
-  inset: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 42%;
   z-index: 90;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .video-tip {
@@ -672,6 +694,7 @@ function goHome() {
   border: 3px solid #fff;
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
 
   img {
     width: 48%;
