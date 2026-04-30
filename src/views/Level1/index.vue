@@ -463,7 +463,7 @@ onUnmounted(() => {
 .tool-card {
   position: absolute;
   top: 75.62%;
-  width: 30.5%;
+  width: 37.5%;
   height: 13.2%;
   border: 0;
   padding: 0;
@@ -490,11 +490,11 @@ onUnmounted(() => {
 }
 
 .tool-card--meter {
-  left: 20.7%;
+  left: 14.7%;
 }
 
 .tool-card--photo {
-  left: 54%;
+  left: 51%;
 }
 
 .toast {
