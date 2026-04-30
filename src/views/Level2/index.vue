@@ -124,6 +124,7 @@
     <ResultModal
       v-if="gamePhase === 'success'"
       :success="true"
+      :level="2"
       message="拼图复原成功！你已熟悉变电设备的标准形态。"
       @next="goHome"
     />

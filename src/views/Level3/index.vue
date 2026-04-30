@@ -74,11 +74,15 @@
 
       <div v-if="showVideoTip" class="video-tip-mask" @click="showVideoTip = false">
         <div class="video-tip" @click.stop>
-          <img :src="glovesImage" alt="操作提示" />
+          <img :src="processTipImage" alt="操作提示" />
         </div>
       </div>
 
-      <div v-if="workerChanged" class="worker-replace-tip">小人占位</div>
+      <img
+        class="operate-person"
+        :src="ticketChecked ? personImage : personNoImage"
+        alt=""
+      />
 
       <div class="operate-tool-panel">
         <img class="operate-tool-bg" :src="toolBgImage" alt="" />
@@ -113,6 +117,7 @@
     <ResultModal
       v-if="levelComplete"
       :success="true"
+      :level="3"
       message="倒闸操作挑战成功！"
       @next="goHome"
     />
@@ -132,6 +137,11 @@ import toolBgImage from '@/assets/level3/第三关/tool_bg.png'
 import wrapperImage from '@/assets/level3/第三关/wrapper.png'
 import topTipImage from '@/assets/level3/第三关/top_tip.png'
 import closeImage from '@/assets/level3/第三关/close.png'
+import personNoImage from '@/assets/level3/第三关/person_no.png'
+import personImage from '@/assets/level3/第三关/person.png'
+import step2Image from '@/assets/level3/第三关/2img.png'
+import step3Image from '@/assets/level3/第三关/3img.png'
+import step4Image from '@/assets/level3/第三关/4img.png'
 import ticketImage from '@/assets/level3/第三关/工作票操作票.png'
 import glovesImage from '@/assets/level3/第三关/绝缘手套.png'
 import groundImage from '@/assets/level3/第三关/接地线.png'
@@ -169,7 +179,8 @@ const router = useRouter()
 const gamePhase = ref<GamePhase>('start')
 const toastText = ref('')
 const showVideoTip = ref(false)
-const workerChanged = ref(false)
+const processTipImage = ref(step2Image)
+const ticketChecked = ref(false)
 const levelComplete = ref(false)
 const selectedSlotsRef = ref<HTMLElement | null>(null)
 const selectOrderCounter = ref(0)
@@ -196,8 +207,8 @@ const selectedTools = computed(() =>
 const operateAreas = reactive<OperateArea[]>([
   { id: 'topLeft', active: false, style: { left: '4%', top: '13%', width: '13%', height: '7%' } },
   { id: 'middle', active: false, style: { left: '43%', top: '29%', width: '16%', height: '7%' } },
-  { id: 'right', active: false, style: { left: '84%', top: '62%', width: '13%', height: '8%' } },
-  { id: 'bottomRight', active: false, style: { left: '50%', top: '68%', width: '13%', height: '8%' } },
+  { id: 'right', active: false, style: { left: '2%', top: '64%', width: '13%', height: '8%' } },
+  { id: 'bottomRight', active: false, style: { left: '50%', top: '68%', width: '13%', height: '8%', zIndex: '99' } },
 ])
 
 const operateSteps: OperateStep[] = [
@@ -365,14 +376,19 @@ function handleToolDrop(tool: SelectTool, x: number, y: number) {
   operateStepIndex.value += 1
 
   if (expected.toolId === 'ticket') {
+    ticketChecked.value = true
     showToast('工作票操作票确认完成')
   } else if (expected.toolId === 'gloves') {
+    processTipImage.value = step2Image
     showVideoTip.value = true
-    workerChanged.value = true
     showToast('绝缘手套操作完成')
   } else if (expected.toolId === 'tester') {
+    processTipImage.value = step3Image
+    showVideoTip.value = true
     showToast('设备无电')
   } else if (expected.toolId === 'ground') {
+    processTipImage.value = step4Image
+    showVideoTip.value = true
     showToast('接地线操作完成')
   }
 
@@ -381,8 +397,10 @@ function handleToolDrop(tool: SelectTool, x: number, y: number) {
 
 function checkOperateComplete() {
   if (operateStepIndex.value >= operateSteps.length) {
-    levelComplete.value = true
-    showToast('全部操作完成')
+    setTimeout(() => {
+      showVideoTip.value = false
+      levelComplete.value = true
+    }, 1500)
   }
 }
 
@@ -682,10 +700,10 @@ function goHome() {
 
 .video-tip {
   position: absolute;
-  top: 13%;
+  top: 17%;
   left: 50%;
-  width: min(46vw, 180px);
-  aspect-ratio: 16 / 9;
+  width: min(82vw, 340px);
+  aspect-ratio: 1227 / 725;
   transform: translateX(-50%);
   z-index: 40;
   display: flex;
@@ -697,23 +715,19 @@ function goHome() {
   pointer-events: auto;
 
   img {
-    width: 48%;
-    height: 70%;
-    object-fit: contain;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
   }
 }
 
-.worker-replace-tip {
+.operate-person {
   position: absolute;
-  left: 38%;
-  top: 72%;
-  z-index: 35;
-  padding: 6px 12px;
-  border-radius: 14px;
-  color: #fff;
-  font-size: $font-size-xs;
-  font-weight: 700;
-  background: rgba(0, 0, 0, 0.58);
+  left: 33%;
+  top: 60%;
+  width: 40%;
+  z-index: 28;
   pointer-events: none;
 }
 

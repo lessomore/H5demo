@@ -92,15 +92,24 @@
             <img class="warning-mark" :src="warningImage" alt="" />
           </div>
         </div>
-        <button class="submit-button" type="button" @click="goHome">完成</button>
+        <button class="submit-button" type="button" @click="levelComplete = true">完成</button>
       </div>
     </div>
+
+    <ResultModal
+      v-if="levelComplete"
+      :success="true"
+      :level="1"
+      message="日常巡检挑战成功！"
+      @next="goHome"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import ResultModal from '@/components/ResultModal.vue'
 import tipImage from '@/assets/level1/第一大关/tishi.png'
 import personImage from '@/assets/level1/第一大关/person.png'
 import startImage from '@/assets/level1/第一大关/start.png'
@@ -133,6 +142,7 @@ const router = useRouter()
 const phase = ref<Phase>('start')
 const photoAreaRef = ref<HTMLElement | null>(null)
 const toastText = ref('')
+const levelComplete = ref(false)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
 const temperaturePoints = reactive<TemperaturePoint[]>([
